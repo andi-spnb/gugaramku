@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Tabular numbers untuk harga dan angka finansial */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer components {
+  /* Price Level Button Colors */
+  .price-level-h1 {
+    @apply bg-[#3498db] text-white hover:bg-[#2980b9];
+  }
+  
+  .price-level-h2 {
+    @apply bg-[#27ae60] text-white hover:bg-[#219a52];
+  }
+  
+  .price-level-h3 {
+    @apply bg-[#f39c12] text-white hover:bg-[#d68910];
+  }
+  
+  .price-level-h4 {
+    @apply bg-[#9b59b6] text-white hover:bg-[#8e44ad];
+  }
+
+  /* Price Level Inactive State */
+  .price-level-inactive {
+    @apply bg-gray-100 text-gray-700 border border-gray-200 hover:border-gray-300;
+  }
+
+  /* Status Colors */
+  .status-success {
+    @apply bg-green-50 text-green-700 border-green-200;
+  }
+  
+  .status-warning {
+    @apply bg-amber-50 text-amber-700 border-amber-200;
+  }
+  
+  .status-error {
+    @apply bg-red-50 text-red-700 border-red-200;
+  }
+  
+  .status-info {
+    @apply bg-blue-50 text-blue-700 border-blue-200;
+  }
+
+  /* Stock Status Indicators */
+  .stock-normal {
+    @apply text-green-600;
+  }
+  
+  .stock-low {
+    @apply text-amber-600;
+  }
+  
+  .stock-empty {
+    @apply text-red-600;
+  }
+
+  /* Skeleton Loading Animation */
+  .skeleton {
+    @apply relative overflow-hidden bg-gray-200 before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/60 before:to-transparent;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but allow scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.300') transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: theme('colors.gray.300');
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.gray.400');
+  }
+
+  /* Text selection color */
+  .selection-primary ::selection {
+    background-color: theme('colors.blue.200');
+    color: theme('colors.blue.900');
+  }
+}
+
+/* Print styles for receipts */
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+
+  body {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+}
+
+/* Receipt 80mm */
+@media print and (min-width: 70mm) {
+  @page {
+    size: 80mm auto;
+  }
+
+  body {
+    font-size: 12px;
+  }
+}

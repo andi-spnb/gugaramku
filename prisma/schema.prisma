@@ -1,0 +1,454 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// MODELS (SQLite compatible)
+// ===========================================
+
+model Cabang {
+  id        String   @id @default(uuid())
+  kode      String   @unique
+  nama      String
+  alamat    String?
+  telepon   String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users      User[]
+  stok       Stok[]
+  stokMutasi StokMutasi[]
+  transaksi  Transaksi[]
+  kas        Kas?
+  kasMutasi  KasMutasi[]
+  shift      Shift[]
+  retur      Retur[]
+
+  @@map("cabang")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  cabangId  String?   @map("cabang_id")
+  nama      String
+  email     String    @unique
+  password  String
+  pin       String?
+  role      String    @default("KASIR") // OWNER, ADMIN_CABANG, KASIR
+  isActive  Boolean   @default(true) @map("is_active")
+  lastLogin DateTime? @map("last_login")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  cabang           Cabang?            @relation(fields: [cabangId], references: [id])
+  transaksi        Transaksi[]
+  stokMutasi       StokMutasi[]
+  kasMutasi        KasMutasi[]
+  shift            Shift[]
+  retur            Retur[]
+  hutangPembayaran HutangPembayaran[]
+  logAktivitas     LogAktivitas[]
+
+  @@index([cabangId])
+  @@index([role])
+  @@map("user")
+}
+
+model Kategori {
+  id        String   @id @default(uuid())
+  nama      String   @unique
+  deskripsi String?
+  urutan    Int      @default(0)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  produk Produk[]
+
+  @@index([urutan])
+  @@map("kategori")
+}
+
+model Produk {
+  id          String   @id @default(uuid())
+  barcode     String?  @unique
+  nama        String
+  kategoriId  String?  @map("kategori_id")
+  hargaModal  Float    @default(0) @map("harga_modal")
+  satuanDasar String   @map("satuan_dasar")
+  gambar      String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  kategori        Kategori?         @relation(fields: [kategoriId], references: [id])
+  produkSatuan    ProdukSatuan[]
+  stok            Stok[]
+  stokMutasi      StokMutasi[]
+  detailTransaksi DetailTransaksi[]
+
+  @@index([barcode])
+  @@index([nama])
+  @@index([kategoriId])
+  @@index([isActive])
+  @@map("produk")
+}
+
+model ProdukSatuan {
+  id         String   @id @default(uuid())
+  produkId   String   @map("produk_id")
+  namaSatuan String   @map("nama_satuan")
+  konversi   Float    @default(1)
+  harga1     Float    @default(0) @map("harga_1")
+  harga2     Float    @default(0) @map("harga_2")
+  harga3     Float    @default(0) @map("harga_3")
+  harga4     Float    @default(0) @map("harga_4")
+  isDefault  Boolean  @default(false) @map("is_default")
+  urutan     Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  produk          Produk            @relation(fields: [produkId], references: [id], onDelete: Cascade)
+  detailTransaksi DetailTransaksi[]
+
+  @@unique([produkId, namaSatuan])
+  @@index([produkId])
+  @@map("produk_satuan")
+}
+
+model Stok {
+  id          String   @id @default(uuid())
+  produkId    String   @map("produk_id")
+  cabangId    String   @map("cabang_id")
+  jumlah      Float    @default(0)
+  stokMinimum Float    @default(0) @map("stok_minimum")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  produk Produk @relation(fields: [produkId], references: [id], onDelete: Cascade)
+  cabang Cabang @relation(fields: [cabangId], references: [id])
+
+  @@unique([produkId, cabangId])
+  @@index([cabangId])
+  @@map("stok")
+}
+
+model StokMutasi {
+  id            String   @id @default(uuid())
+  produkId      String   @map("produk_id")
+  cabangId      String   @map("cabang_id")
+  jumlah        Float
+  jumlahSebelum Float    @map("jumlah_sebelum")
+  jumlahSesudah Float    @map("jumlah_sesudah")
+  tipe          String   // MASUK, KELUAR, ADJUSTMENT_PLUS, etc.
+  referensiTipe String?  @map("referensi_tipe")
+  referensiId   String?  @map("referensi_id")
+  keterangan    String?
+  userId        String   @map("user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  produk Produk @relation(fields: [produkId], references: [id])
+  cabang Cabang @relation(fields: [cabangId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([produkId])
+  @@index([cabangId])
+  @@index([createdAt])
+  @@index([referensiTipe, referensiId])
+  @@map("stok_mutasi")
+}
+
+model Pelanggan {
+  id           String   @id @default(uuid())
+  nama         String
+  telepon      String?
+  alamat       String?
+  kategori     String   @default("RETAIL") // RETAIL, RESELLER, DISTRIBUTOR
+  maxHutang    Float    @default(0) @map("max_hutang")
+  totalBelanja Float    @default(0) @map("total_belanja")
+  catatan      String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  transaksi Transaksi[]
+  hutang    Hutang[]
+
+  @@index([nama])
+  @@index([telepon])
+  @@index([kategori])
+  @@map("pelanggan")
+}
+
+model Transaksi {
+  id           String   @id @default(uuid())
+  nomor        String   @unique
+  cabangId     String   @map("cabang_id")
+  kasirId      String   @map("kasir_id")
+  pelangganId  String?  @map("pelanggan_id")
+  tanggal      DateTime
+  tingkatHarga Int      @map("tingkat_harga")
+  subtotal     Float
+  diskon       Float    @default(0)
+  total        Float
+  metodeBayar  String   @map("metode_bayar") // TUNAI, QRIS, TRANSFER, HUTANG, SPLIT
+  jumlahBayar  Float    @map("jumlah_bayar")
+  kembalian    Float    @default(0)
+  catatan      String?
+  status       String   @default("SELESAI") // SELESAI, BATAL, HOLD
+  statusSync   String   @default("SYNCED") @map("status_sync") // PENDING, SYNCED, CONFLICT
+  deviceId     String?  @map("device_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  cabang          Cabang            @relation(fields: [cabangId], references: [id])
+  kasir           User              @relation(fields: [kasirId], references: [id])
+  pelanggan       Pelanggan?        @relation(fields: [pelangganId], references: [id])
+  detailTransaksi DetailTransaksi[]
+  hutang          Hutang[]
+  retur           Retur[]
+
+  @@index([nomor])
+  @@index([cabangId])
+  @@index([kasirId])
+  @@index([pelangganId])
+  @@index([tanggal])
+  @@index([statusSync])
+  @@map("transaksi")
+}
+
+model DetailTransaksi {
+  id             String   @id @default(uuid())
+  transaksiId    String   @map("transaksi_id")
+  produkId       String?  @map("produk_id")
+  produkSatuanId String?  @map("produk_satuan_id")
+  namaBarang     String   @map("nama_barang")
+  barcode        String?
+  jumlah         Float
+  satuan         String
+  konversi       Float
+  hargaModal     Float    @map("harga_modal")
+  hargaJual      Float    @map("harga_jual")
+  tingkatHarga   Int      @map("tingkat_harga")
+  diskon         Float    @default(0)
+  subtotal       Float
+  laba           Float
+  isQuickSale    Boolean  @default(false) @map("is_quick_sale")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  transaksi    Transaksi     @relation(fields: [transaksiId], references: [id], onDelete: Cascade)
+  produk       Produk?       @relation(fields: [produkId], references: [id])
+  produkSatuan ProdukSatuan? @relation(fields: [produkSatuanId], references: [id])
+  returDetail  ReturDetail[]
+
+  @@index([transaksiId])
+  @@index([produkId])
+  @@map("detail_transaksi")
+}
+
+model Hutang {
+  id          String    @id @default(uuid())
+  transaksiId String    @map("transaksi_id")
+  pelangganId String    @map("pelanggan_id")
+  jumlah      Float
+  sisa        Float
+  jatuhTempo  DateTime? @map("jatuh_tempo")
+  status      String    @default("BELUM_LUNAS") // BELUM_LUNAS, LUNAS
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  transaksi  Transaksi          @relation(fields: [transaksiId], references: [id])
+  pelanggan  Pelanggan          @relation(fields: [pelangganId], references: [id])
+  pembayaran HutangPembayaran[]
+
+  @@index([pelangganId])
+  @@index([status])
+  @@index([jatuhTempo])
+  @@map("hutang")
+}
+
+model HutangPembayaran {
+  id        String   @id @default(uuid())
+  hutangId  String   @map("hutang_id")
+  jumlah    Float
+  metode    String   // TUNAI, QRIS, TRANSFER
+  catatan   String?
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  hutang Hutang @relation(fields: [hutangId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([hutangId])
+  @@map("hutang_pembayaran")
+}
+
+model Kas {
+  id        String   @id @default(uuid())
+  cabangId  String   @unique @map("cabang_id")
+  saldo     Float    @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  cabang Cabang @relation(fields: [cabangId], references: [id])
+
+  @@map("kas")
+}
+
+model KasMutasi {
+  id            String   @id @default(uuid())
+  cabangId      String   @map("cabang_id")
+  jenis         String   // MASUK, KELUAR
+  kategori      String
+  nominal       Float
+  saldoSebelum  Float    @map("saldo_sebelum")
+  saldoSesudah  Float    @map("saldo_sesudah")
+  keterangan    String?
+  referensiTipe String?  @map("referensi_tipe")
+  referensiId   String?  @map("referensi_id")
+  userId        String   @map("user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  cabang Cabang @relation(fields: [cabangId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([cabangId])
+  @@index([createdAt])
+  @@index([kategori])
+  @@map("kas_mutasi")
+}
+
+model Shift {
+  id             String    @id @default(uuid())
+  cabangId       String    @map("cabang_id")
+  kasirId        String    @map("kasir_id")
+  modalAwal      Float     @map("modal_awal")
+  totalPenjualan Float     @default(0) @map("total_penjualan")
+  totalTransaksi Int       @default(0) @map("total_transaksi")
+  kasAkhirSistem Float?    @map("kas_akhir_sistem")
+  kasAkhirAktual Float?    @map("kas_akhir_aktual")
+  selisih        Float?
+  catatan        String?
+  waktuBuka      DateTime  @map("waktu_buka")
+  waktuTutup     DateTime? @map("waktu_tutup")
+  status         String    @default("BUKA") // BUKA, TUTUP
+
+  // Relations
+  cabang Cabang @relation(fields: [cabangId], references: [id])
+  kasir  User   @relation(fields: [kasirId], references: [id])
+
+  @@index([cabangId])
+  @@index([kasirId])
+  @@index([status])
+  @@map("shift")
+}
+
+model Retur {
+  id              String   @id @default(uuid())
+  nomor           String   @unique
+  transaksiAsalId String   @map("transaksi_asal_id")
+  cabangId        String   @map("cabang_id")
+  userId          String   @map("user_id")
+  tanggal         DateTime
+  totalRefund     Float    @map("total_refund")
+  metodeRefund    String   @map("metode_refund") // TUNAI, TUKAR_BARANG
+  alasan          String   // RUSAK, SALAH, EXPIRED, LAINNYA
+  catatan         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  transaksiAsal Transaksi     @relation(fields: [transaksiAsalId], references: [id])
+  cabang        Cabang        @relation(fields: [cabangId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+  detail        ReturDetail[]
+
+  @@index([transaksiAsalId])
+  @@index([cabangId])
+  @@map("retur")
+}
+
+model ReturDetail {
+  id                String   @id @default(uuid())
+  returId           String   @map("retur_id")
+  detailTransaksiId String   @map("detail_transaksi_id")
+  jumlah            Float
+  nilaiRefund       Float    @map("nilai_refund")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  retur           Retur           @relation(fields: [returId], references: [id], onDelete: Cascade)
+  detailTransaksi DetailTransaksi @relation(fields: [detailTransaksiId], references: [id])
+
+  @@map("retur_detail")
+}
+
+model PengaturanHarga {
+  id        String   @id @default(uuid())
+  tingkat   Int      @unique
+  nama      String
+  warna     String
+  deskripsi String?
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("pengaturan_harga")
+}
+
+model PengaturanToko {
+  id              String   @id @default(uuid())
+  namaToko        String   @map("nama_toko")
+  alamat          String?
+  telepon         String?
+  email           String?
+  logo            String?
+  footerStruk     String?  @map("footer_struk")
+  printerSize     String   @default("58mm") @map("printer_size") // 58mm, 80mm
+  autoLogoutMenit Int      @default(30) @map("auto_logout_menit")
+  qrisImage       String?  @map("qris_image")
+  rekeningBank    String?  @map("rekening_bank") // JSON string
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("pengaturan_toko")
+}
+
+model LogAktivitas {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  aksi      String
+  tabel     String
+  recordId  String?  @map("record_id")
+  dataLama  String?  @map("data_lama") // JSON string
+  dataBaru  String?  @map("data_baru") // JSON string
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tabel])
+  @@index([createdAt])
+  @@index([aksi])
+  @@map("log_aktivitas")
+}
