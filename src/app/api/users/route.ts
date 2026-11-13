@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 
@@ -170,12 +171,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Create user (in production, password should be hashed)
+    // Hash password sebelum disimpan
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
     const user = await prisma.user.create({
       data: {
         nama,
         email,
-        password, // TODO: Hash password in production
+        password: hashedPassword,
         pin: pin || null,
         role,
         cabangId: cabangId || null,

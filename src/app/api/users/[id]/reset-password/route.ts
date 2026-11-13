@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 
@@ -33,10 +34,13 @@ export async function POST(
       }, { status: 404 });
     }
 
-    // Update password (in production, should be hashed)
+    // Hash password baru sebelum disimpan
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
     await prisma.user.update({
       where: { id: params.id },
-      data: { password: newPassword }, // TODO: Hash password in production
+      data: { password: hashedPassword },
     });
 
     const response: ApiResponse<{ message: string }> = {

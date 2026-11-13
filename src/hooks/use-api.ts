@@ -14,6 +14,10 @@ import {
   reorderCategories,
   createTransaction,
   getTransactions,
+  holdTransaction,
+  getHeldTransactions,
+  deleteHeldTransaction,
+  type HoldTransactionParams,
   getStock,
   getStockMutations,
   createStockAdjustment,
@@ -292,6 +296,55 @@ export function useTransactions(params: GetTransactionsParams = {}) {
         transactions: response.data || [],
         meta: response.meta,
       };
+    },
+  });
+}
+
+export function useHoldTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: HoldTransactionParams) => {
+      const response = await holdTransaction(params);
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal menahan transaksi');
+      }
+      return response.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['held-transactions'] });
+    },
+  });
+}
+
+export function useHeldTransactions(cabangId: string) {
+  return useQuery({
+    queryKey: ['held-transactions', cabangId],
+    queryFn: async () => {
+      const response = await getHeldTransactions(cabangId);
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal memuat transaksi tertahan');
+      }
+      return response.data || [];
+    },
+    enabled: !!cabangId,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useDeleteHeldTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await deleteHeldTransaction(id);
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal menghapus transaksi tertahan');
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['held-transactions'] });
     },
   });
 }

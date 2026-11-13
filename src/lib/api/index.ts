@@ -233,6 +233,38 @@ export async function createTransaction(
   });
 }
 
+export interface HoldTransactionParams {
+  cabangId: string;
+  kasirId: string;
+  tingkatHarga: number;
+  catatan?: string | null;
+  diskonTotal: number;
+  items: CreateTransactionParams['items'];
+}
+
+export async function holdTransaction(
+  params: HoldTransactionParams
+): Promise<ApiResponse<TransaksiWithDetails>> {
+  return fetchApi<TransaksiWithDetails>('/transactions/hold', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function getHeldTransactions(
+  cabangId: string
+): Promise<ApiResponse<TransaksiWithDetails[]>> {
+  return fetchApi<TransaksiWithDetails[]>(`/transactions/hold?cabangId=${encodeURIComponent(cabangId)}`);
+}
+
+export async function deleteHeldTransaction(
+  id: string
+): Promise<ApiResponse<null>> {
+  return fetchApi<null>(`/transactions/hold/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export interface GetTransactionsParams {
   cabangId?: string;
   kasirId?: string;

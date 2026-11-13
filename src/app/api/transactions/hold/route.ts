@@ -1,0 +1,263 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/db/prisma';
+import type { ApiResponse, TransaksiWithDetails } from '@/types';
+import { MetodeBayar, StatusSync } from '@/types';
+
+export const dynamic = 'force-dynamic';
+
+interface HoldTransactionBody {
+  cabangId: string;
+  kasirId: string;
+  tingkatHarga: number;
+  catatan?: string | null;
+  diskonTotal: number;
+  items: Array<{
+    produkId?: string | null;
+    produkSatuanId?: string | null;
+    namaBarang: string;
+    barcode?: string | null;
+    jumlah: number;
+    satuan: string;
+    konversi: number;
+    hargaModal: number;
+    hargaJual: number;
+    diskon: number;
+    isQuickSale: boolean;
+  }>;
+}
+
+// POST /api/transactions/hold - Hold (simpan sementara) transaksi
+export async function POST(request: NextRequest) {
+  try {
+    const body: HoldTransactionBody = await request.json();
+
+    if (!body.cabangId || !body.kasirId || !body.items?.length) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Data transaksi hold tidak lengkap',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // Calculate totals
+    let subtotal = 0;
+    const detailItems = body.items.map((item) => {
+      const itemSubtotal = item.jumlah * item.hargaJual - item.diskon;
+      subtotal += itemSubtotal;
+
+      return {
+        produkId: item.produkId || null,
+        produkSatuanId: item.produkSatuanId || null,
+        namaBarang: item.namaBarang,
+        barcode: item.barcode || null,
+        jumlah: item.jumlah,
+        satuan: item.satuan,
+        konversi: item.konversi,
+        hargaModal: item.hargaModal,
+        hargaJual: item.hargaJual,
+        tingkatHarga: body.tingkatHarga,
+        diskon: item.diskon,
+        subtotal: itemSubtotal,
+        laba: (item.hargaJual - item.hargaModal) * item.jumlah - item.diskon,
+        isQuickSale: item.isQuickSale,
+      };
+    });
+
+    const total = subtotal - body.diskonTotal;
+
+    // Generate hold number: HLD-YYYYMMDD-XXXX
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+    const count = await prisma.transaksi.count({
+      where: {
+        cabangId: body.cabangId,
+        tanggal: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+      },
+    });
+
+    const nomor = `HLD-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+
+    // Create held transaction (status HOLD)
+    // Stok TIDAK dikurangi, kas TIDAK diubah
+    const result = await prisma.transaksi.create({
+      data: {
+        nomor,
+        cabangId: body.cabangId,
+        kasirId: body.kasirId,
+        tanggal: new Date(),
+        tingkatHarga: body.tingkatHarga,
+        subtotal,
+        diskon: body.diskonTotal,
+        total,
+        metodeBayar: 'TUNAI',
+        jumlahBayar: 0,
+        kembalian: 0,
+        catatan: body.catatan || null,
+        status: 'HOLD',
+        statusSync: 'SYNCED',
+        detailTransaksi: {
+          create: detailItems,
+        },
+      },
+      include: {
+        kasir: {
+          select: {
+            id: true,
+            nama: true,
+            email: true,
+            role: true,
+            cabangId: true,
+            isActive: true,
+            lastLogin: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        detailTransaksi: true,
+      },
+    });
+
+    const transformedResult: TransaksiWithDetails = {
+      id: result.id,
+      nomor: result.nomor,
+      cabangId: result.cabangId,
+      kasirId: result.kasirId,
+      pelangganId: result.pelangganId,
+      tanggal: result.tanggal,
+      tingkatHarga: result.tingkatHarga,
+      subtotal: Number(result.subtotal),
+      diskon: Number(result.diskon),
+      total: Number(result.total),
+      metodeBayar: result.metodeBayar as MetodeBayar,
+      jumlahBayar: Number(result.jumlahBayar),
+      kembalian: Number(result.kembalian),
+      catatan: result.catatan,
+      status: result.status as never,
+      statusSync: result.statusSync as StatusSync,
+      deviceId: result.deviceId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      kasir: result.kasir as never,
+      detailTransaksi: result.detailTransaksi.map((d) => ({
+        ...d,
+        jumlah: Number(d.jumlah),
+        konversi: Number(d.konversi),
+        hargaModal: Number(d.hargaModal),
+        hargaJual: Number(d.hargaJual),
+        diskon: Number(d.diskon),
+        subtotal: Number(d.subtotal),
+        laba: Number(d.laba),
+      })),
+    };
+
+    const response: ApiResponse<TransaksiWithDetails> = {
+      success: true,
+      data: transformedResult,
+      message: 'Transaksi berhasil ditahan',
+    };
+
+    return NextResponse.json(response, { status: 201 });
+  } catch (error) {
+    console.error('Error holding transaction:', error);
+
+    const response: ApiResponse<null> = {
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Gagal menahan transaksi',
+      },
+    };
+
+    return NextResponse.json(response, { status: 500 });
+  }
+}
+
+// GET /api/transactions/hold?cabangId=xxx - List held transactions
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const cabangId = searchParams.get('cabangId');
+
+    if (!cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Cabang harus dipilih',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const transactions = await prisma.transaksi.findMany({
+      where: {
+        cabangId,
+        status: 'HOLD',
+      },
+      include: {
+        detailTransaksi: true,
+      },
+      orderBy: { tanggal: 'desc' },
+    });
+
+    const transformed = transactions.map((t) => ({
+      id: t.id,
+      nomor: t.nomor,
+      cabangId: t.cabangId,
+      kasirId: t.kasirId,
+      pelangganId: t.pelangganId,
+      tanggal: t.tanggal,
+      tingkatHarga: t.tingkatHarga,
+      subtotal: Number(t.subtotal),
+      diskon: Number(t.diskon),
+      total: Number(t.total),
+      metodeBayar: t.metodeBayar,
+      jumlahBayar: Number(t.jumlahBayar),
+      kembalian: Number(t.kembalian),
+      catatan: t.catatan,
+      status: t.status,
+      statusSync: t.statusSync,
+      deviceId: t.deviceId,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+      detailTransaksi: t.detailTransaksi.map((d) => ({
+        ...d,
+        jumlah: Number(d.jumlah),
+        konversi: Number(d.konversi),
+        hargaModal: Number(d.hargaModal),
+        hargaJual: Number(d.hargaJual),
+        diskon: Number(d.diskon),
+        subtotal: Number(d.subtotal),
+        laba: Number(d.laba),
+      })),
+    }));
+
+    const response: ApiResponse<typeof transformed> = {
+      success: true,
+      data: transformed,
+    };
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Error fetching held transactions:', error);
+
+    const response: ApiResponse<null> = {
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Gagal memuat transaksi tertahan',
+      },
+    };
+
+    return NextResponse.json(response, { status: 500 });
+  }
+}

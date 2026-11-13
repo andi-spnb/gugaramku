@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { Package, ShoppingCart } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { PriceLevelSelector } from '@/components/kasir/price-level-selector';
 import { ProductSearch } from '@/components/kasir/product-search';
 import { Cart } from '@/components/kasir/cart';
@@ -12,12 +14,14 @@ import { ItemDiscountDialog } from '@/components/kasir/item-discount-dialog';
 import type { ItemDiscountData } from '@/components/kasir/item-discount-dialog';
 import { TotalDiscountDialog } from '@/components/kasir/total-discount-dialog';
 import type { TotalDiscountData } from '@/components/kasir/total-discount-dialog';
+import { HoldListDialog } from '@/components/kasir/hold-list-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { generateUUID } from '@/lib/utils';
 import { getPriceByLevel } from '@/lib/constants/price-levels';
-import { useCreateTransaction } from '@/hooks/use-api';
-import type { CartItem, CartItemUnit, ProdukWithDetails, ProdukSatuan, MetodeBayar } from '@/types';
+import { useCreateTransaction, useHoldTransaction, useHeldTransactions, useDeleteHeldTransaction } from '@/hooks/use-api';
+import { useCurrentUser } from '@/hooks/use-auth';
+import type { CartItem, CartItemUnit, ProdukWithDetails, ProdukSatuan, MetodeBayar, TransaksiWithDetails } from '@/types';
 
 // Data dummy untuk demo
 const DUMMY_PRICE_LEVELS = [
@@ -29,9 +33,11 @@ const DUMMY_PRICE_LEVELS = [
 
 // Temporary IDs untuk demo (akan diganti dengan data dari auth/session)
 const DEMO_CABANG_ID = 'demo-cabang-001';
-const DEMO_KASIR_ID = 'demo-kasir-001';
 
 export function KasirPage() {
+  // Session user
+  const { user } = useCurrentUser();
+  const KASIR_ID = user?.id || 'demo-kasir-001';
   // State
   const [tingkatHarga, setTingkatHarga] = useState(1);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -41,11 +47,18 @@ export function KasirPage() {
   const [isItemDiscountOpen, setIsItemDiscountOpen] = useState(false);
   const [selectedItemForDiscount, setSelectedItemForDiscount] = useState<CartItem | null>(null);
   const [isTotalDiscountOpen, setIsTotalDiscountOpen] = useState(false);
+  // Mobile view state: 'products' or 'cart'
+  const [mobileView, setMobileView] = useState<'products' | 'cart'>('products');
+
   const [isConfirmChangeLevelOpen, setIsConfirmChangeLevelOpen] = useState(false);
   const [pendingTingkatHarga, setPendingTingkatHarga] = useState<number | null>(null);
+  const [isHoldListOpen, setIsHoldListOpen] = useState(false);
 
   // API Mutation
   const createTransactionMutation = useCreateTransaction();
+  const holdTransactionMutation = useHoldTransaction();
+  const deleteHeldTransactionMutation = useDeleteHeldTransaction();
+  const { data: heldTransactions = [] } = useHeldTransactions(DEMO_CABANG_ID);
 
   // Calculations
   const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -311,7 +324,7 @@ export function KasirPage() {
     // Prepare transaction data
     const transactionData = {
       cabangId: DEMO_CABANG_ID,
-      kasirId: DEMO_KASIR_ID,
+      kasirId: KASIR_ID,
       tingkatHarga,
       metodeBayar: paymentData.metodeBayar as MetodeBayar,
       jumlahBayar: paymentData.jumlahBayar,
@@ -353,10 +366,87 @@ export function KasirPage() {
       setDiskonTotal(0);
       setIsPaymentOpen(false);
     }
-  }, [tingkatHarga, cartItems, diskonTotal, createTransactionMutation]);
+  }, [tingkatHarga, cartItems, diskonTotal, createTransactionMutation, KASIR_ID]);
+
+  // Hold transaction (simpan sementara)
+  const handleHoldTransaction = useCallback(async () => {
+    if (cartItems.length === 0) return;
+
+    try {
+      await holdTransactionMutation.mutateAsync({
+        cabangId: DEMO_CABANG_ID,
+        kasirId: KASIR_ID,
+        tingkatHarga,
+        diskonTotal,
+        items: cartItems.map((item) => ({
+          produkId: item.produkId.startsWith('qs-') ? null : item.produkId,
+          produkSatuanId: item.produkSatuanId.startsWith('qs-') ? null : item.produkSatuanId,
+          namaBarang: item.nama,
+          barcode: item.barcode,
+          jumlah: item.jumlah,
+          satuan: item.satuan,
+          konversi: item.konversi,
+          hargaModal: item.hargaModal,
+          hargaJual: item.hargaJual,
+          diskon: item.diskon,
+          isQuickSale: item.produkId.startsWith('qs-'),
+        })),
+      });
+
+      toast.success('Transaksi ditahan. Bisa dilanjutkan nanti.');
+      setCartItems([]);
+      setDiskonTotal(0);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal menahan transaksi');
+    }
+  }, [cartItems, tingkatHarga, diskonTotal, holdTransactionMutation, KASIR_ID]);
+
+  // Resume held transaction: load items back into cart
+  const handleResumeTransaction = useCallback((trx: TransaksiWithDetails) => {
+    const restoredItems: CartItem[] = trx.detailTransaksi.map((d) => ({
+      id: generateUUID(),
+      produkId: d.produkId || `qs-${generateUUID()}`,
+      produkSatuanId: d.produkSatuanId || `qs-${generateUUID()}`,
+      nama: d.namaBarang,
+      barcode: d.barcode,
+      satuan: d.satuan,
+      konversi: Number(d.konversi),
+      jumlah: Number(d.jumlah),
+      hargaModal: Number(d.hargaModal),
+      hargaJual: Number(d.hargaJual),
+      diskon: Number(d.diskon),
+      subtotal: Number(d.subtotal),
+      stokTersedia: 999,
+      availableUnits: [],
+    }));
+
+    setCartItems(restoredItems);
+    setTingkatHarga(trx.tingkatHarga);
+    setDiskonTotal(Number(trx.diskon));
+    setIsHoldListOpen(false);
+
+    // Hapus record hold setelah dilanjutkan (akan dibuat transaksi baru saat bayar)
+    deleteHeldTransactionMutation
+      .mutateAsync(trx.id)
+      .catch(() => {
+        // Kalau gagal hapus, tetap lanjut; akan dibersihkan manual
+      });
+
+    toast.success(`Transaksi ${trx.nomor} dilanjutkan`);
+  }, [deleteHeldTransactionMutation]);
+
+  // Delete held transaction
+  const handleDeleteHeld = useCallback(async (id: string) => {
+    try {
+      await deleteHeldTransactionMutation.mutateAsync(id);
+      toast.success('Transaksi tertahan dihapus');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal menghapus');
+    }
+  }, [deleteHeldTransactionMutation]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100vh-8rem)] pb-14 lg:pb-0">
       {/* Price Level Selector */}
       <div className="mb-4">
         <PriceLevelSelector
@@ -368,8 +458,34 @@ export function KasirPage() {
 
       {/* Main Content */}
       <div className="flex flex-1 gap-4 min-h-0">
+        {/* Mobile Tab Switcher */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-gray-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setMobileView('products')}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium border-r border-gray-200',
+              mobileView === 'products' ? 'bg-primary/10 text-primary' : 'text-gray-500'
+            )}
+          >
+            <Package />
+            Produk
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileView('cart')}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium',
+              mobileView === 'cart' ? 'bg-primary/10 text-primary' : 'text-gray-500'
+            )}
+          >
+            <ShoppingCart />
+            Keranjang ({cartItems.length})
+          </button>
+        </div>
+
         {/* Left Side - Product Search & Selection */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={cn('flex-1 flex flex-col min-w-0', mobileView === 'products' ? 'hidden lg:flex' : 'flex')}>
           <ProductSearch 
             onSelectProduct={handleAddProduct}
             onQuickSale={() => setIsQuickSaleOpen(true)}
@@ -378,7 +494,8 @@ export function KasirPage() {
         </div>
 
         {/* Right Side - Cart */}
-        <div className="w-full lg:w-[400px] flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        <div className={cn('w-full lg:w-[400px] lg:flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden',
+          mobileView === 'cart' ? 'flex' : 'hidden')}>
           {/* Cart Header */}
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
@@ -419,6 +536,9 @@ export function KasirPage() {
             onClearCart={handleClearCart}
             onCheckout={() => setIsPaymentOpen(true)}
             onEditTotalDiscount={() => setIsTotalDiscountOpen(true)}
+            onHold={handleHoldTransaction}
+            heldCount={heldTransactions.length}
+            onShowHeld={() => setIsHoldListOpen(true)}
           />
         </div>
       </div>
@@ -474,6 +594,17 @@ export function KasirPage() {
         confirmText="Ya, Ganti Harga"
         cancelText="Batal"
         variant="warning"
+      />
+
+      {/* Hold List Dialog */}
+      <HoldListDialog
+        open={isHoldListOpen}
+        onClose={() => setIsHoldListOpen(false)}
+        heldTransactions={heldTransactions}
+        isLoading={false}
+        onResume={handleResumeTransaction}
+        onDelete={handleDeleteHeld}
+        isDeleting={deleteHeldTransactionMutation.isPending}
       />
     </div>
   );

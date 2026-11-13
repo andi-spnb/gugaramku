@@ -18,11 +18,14 @@ import {
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/hooks/use-auth';
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const { user, isLoading } = useCurrentUser();
   const [isOnline, setIsOnline] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const getRoleLabel = (role: string) => {
@@ -49,21 +52,21 @@ export function Header() {
   const displayCabang = user?.cabangNama || '';
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-3 border-b border-gray-200 bg-white px-3 shadow-sm sm:gap-x-4 sm:px-6 lg:px-8">
       {/* Mobile menu button */}
       <button
         type="button"
         className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
-        onClick={() => setIsMobileMenuOpen(true)}
+        onClick={onMenuClick}
+        aria-label="Buka menu"
       >
-        <span className="sr-only">Buka menu</span>
         <Menu className="h-6 w-6" />
       </button>
 
       {/* Separator */}
-      <div className="h-6 w-px bg-gray-200 lg:hidden" />
+      <div className="hidden h-6 w-px bg-gray-200 lg:hidden" />
 
-      <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+      <div className="flex min-w-0 flex-1 gap-x-4 self-stretch lg:gap-x-6">
         {/* Search */}
         <div className="relative flex flex-1 items-center">
           <Search className="pointer-events-none absolute left-3 h-5 w-5 text-gray-400" />
@@ -74,7 +77,7 @@ export function Header() {
           />
         </div>
 
-        <div className="flex items-center gap-x-4 lg:gap-x-6">
+        <div className="flex items-center gap-x-3 sm:gap-x-4 lg:gap-x-6">
           {/* Online/Offline indicator */}
           <div
             className={cn(
@@ -128,7 +131,7 @@ export function Header() {
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 data-testid="user-menu"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-medium text-primary">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
                 <div className="hidden lg:block text-left">
@@ -137,7 +140,7 @@ export function Header() {
                     {displayRole}{displayCabang ? ` • ${displayCabang}` : ''}
                   </p>
                 </div>
-                <ChevronDown className="hidden lg:block h-4 w-4 text-gray-400" />
+                <ChevronDown className="hidden h-4 w-4 text-gray-400 lg:block" />
               </button>
             )}
 
@@ -149,7 +152,7 @@ export function Header() {
                   onClick={() => setIsUserMenuOpen(false)}
                 />
                 <div className="absolute right-0 z-20 mt-2 w-56 origin-top-right rounded-lg bg-white py-2 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                  <div className="px-4 py-2 border-b border-gray-100 lg:hidden">
+                  <div className="border-b border-gray-100 px-4 py-2 lg:hidden">
                     <p className="text-sm font-medium text-gray-900">{displayName}</p>
                     <p className="text-xs text-gray-500">{user?.email}</p>
                   </div>
@@ -169,7 +172,7 @@ export function Header() {
                     <Settings className="h-4 w-4 text-gray-400" />
                     Pengaturan
                   </Link>
-                  <div className="border-t border-gray-100 my-1" />
+                  <div className="my-1 border-t border-gray-100" />
                   <button
                     type="button"
                     disabled={isLoggingOut}

@@ -16,6 +16,7 @@ const roleRoutes: Record<string, string[]> = {
     '/retur',
     '/pengaturan',
     '/karyawan',
+    '/cabang',
   ],
   KASIR: [
     '/kasir',
