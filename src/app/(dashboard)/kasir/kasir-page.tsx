@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Package, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PriceLevelSelector } from '@/components/kasir/price-level-selector';
@@ -15,6 +15,12 @@ import type { ItemDiscountData } from '@/components/kasir/item-discount-dialog';
 import { TotalDiscountDialog } from '@/components/kasir/total-discount-dialog';
 import type { TotalDiscountData } from '@/components/kasir/total-discount-dialog';
 import { HoldListDialog } from '@/components/kasir/hold-list-dialog';
+import {
+  enqueueTransaction,
+  getPendingTransactions,
+  removePendingTransaction,
+  type PendingTransaction,
+} from '@/lib/offline/queue';
 import { ReceiptDialog, type ReceiptData } from '@/components/kasir/receipt-dialog';
 import { CameraScanDialog } from '@/components/kasir/camera-scan-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -35,13 +41,12 @@ const DUMMY_PRICE_LEVELS = [
   { tingkat: 4, nama: 'Distributor', warna: '#9b59b6' },
 ];
 
-// Temporary IDs untuk demo (akan diganti dengan data dari auth/session)
-const DEMO_CABANG_ID = 'demo-cabang-001';
+// cabangId & kasirId kini diambil dari session user (bukan hardcode demo)
 
 export function KasirPage() {
   // Session user
   const { user } = useCurrentUser();
-  const KASIR_ID = user?.id || 'demo-kasir-001';
+  const CABANG_ID = user?.cabangId || '';
   // State
   const [tingkatHarga, setTingkatHarga] = useState(1);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -57,6 +62,13 @@ export function KasirPage() {
   const [isConfirmChangeLevelOpen, setIsConfirmChangeLevelOpen] = useState(false);
   const [pendingTingkatHarga, setPendingTingkatHarga] = useState<number | null>(null);
   const [isHoldListOpen, setIsHoldListOpen] = useState(false);
+  const [pendingOffline, setPendingOffline] = useState<PendingTransaction[]>([]);
+  const [isRetryingPending, setIsRetryingPending] = useState(false);
+
+  // Muat antrean offline saat halaman dibuka
+  useEffect(() => {
+    getPendingTransactions().then(setPendingOffline).catch(() => undefined);
+  }, []);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isCameraScanOpen, setIsCameraScanOpen] = useState(false);
@@ -65,7 +77,7 @@ export function KasirPage() {
   const createTransactionMutation = useCreateTransaction();
   const holdTransactionMutation = useHoldTransaction();
   const deleteHeldTransactionMutation = useDeleteHeldTransaction();
-  const { data: heldTransactions = [] } = useHeldTransactions(DEMO_CABANG_ID);
+  const { data: heldTransactions = [] } = useHeldTransactions(CABANG_ID);
   const { data: settings } = useSettings();
 
   // Calculations
@@ -358,10 +370,8 @@ export function KasirPage() {
     metodeBayar: string;
     jumlahBayar: number;
   }) => {
-    // Prepare transaction data
+    // Prepare transaction data (identitas dari session; server memvalidasi ulang)
     const transactionData = {
-      cabangId: DEMO_CABANG_ID,
-      kasirId: KASIR_ID,
       tingkatHarga,
       metodeBayar: paymentData.metodeBayar as MetodeBayar,
       jumlahBayar: paymentData.jumlahBayar,
@@ -414,15 +424,65 @@ export function KasirPage() {
       setDiskonTotal(0);
       setIsPaymentOpen(false);
     } catch (error) {
-      // API gagal: JANGAN kosongkan keranjang, biarkan kasir mencoba lagi.
-      // (Penyimpanan offline ke IndexedDB akan diimplementasikan terpisah)
+      // API gagal: simpan ke antrean offline (IndexedDB) agar data tidak hilang.
+      // Kasir bisa mengirim ulang lewat tombol "Kirim ulang" bila koneksi pulih.
       console.error('Transaction API error:', error);
-      toast.error(
-        'Gagal menyimpan transaksi. Keranjang tetap ada, coba bayar ulang atau periksa koneksi.'
-      );
+      try {
+        await enqueueTransaction({
+          payload: transactionData,
+          itemCount: cartItems.length,
+          total,
+        });
+        const queue = await getPendingTransactions();
+        setPendingOffline(queue);
+        toast.error(
+          `Gagal menyimpan transaksi. Tersimpan offline (${queue.length} menunggu kirim). Kirim ulang saat koneksi pulih.`
+        );
+        // Kosongkan keranjang karena data sudah aman di antrean offline
+        setCartItems([]);
+        setDiskonTotal(0);
+      } catch (offlineError) {
+        console.error('Offline queue error:', offlineError);
+        toast.error(
+          'Gagal menyimpan transaksi. Keranjang tetap ada, coba bayar ulang atau periksa koneksi.'
+        );
+      }
       setIsPaymentOpen(false);
     }
-  }, [tingkatHarga, cartItems, diskonTotal, subtotal, total, createTransactionMutation, KASIR_ID, user]);
+  }, [tingkatHarga, cartItems, diskonTotal, subtotal, total, createTransactionMutation, user]);
+
+  // Coba kirim ulang semua transaksi offline
+  const handleRetryPending = useCallback(async () => {
+    if (pendingOffline.length === 0 || isRetryingPending) return;
+    setIsRetryingPending(true);
+
+    try {
+      let berhasil = 0;
+      for (const pending of pendingOffline) {
+        try {
+          await createTransactionMutation.mutateAsync(
+            pending.payload as unknown as Parameters<typeof createTransactionMutation.mutateAsync>[0]
+          );
+          await removePendingTransaction(pending.id!);
+          berhasil += 1;
+        } catch (error) {
+          console.error('Retry gagal untuk transaksi offline:', error);
+          // Berhenti: koneksi/server kemungkinan masih bermasalah
+          break;
+        }
+      }
+      const queue = await getPendingTransactions();
+      setPendingOffline(queue);
+
+      if (berhasil > 0) {
+        toast.success(`${berhasil} transaksi offline berhasil dikirim.`);
+      } else {
+        toast.error('Masih gagal mengirim transaksi offline. Coba lagi nanti.');
+      }
+    } finally {
+      setIsRetryingPending(false);
+    }
+  }, [pendingOffline, isRetryingPending, createTransactionMutation]);
 
   // Hold transaction (simpan sementara)
   const handleHoldTransaction = useCallback(async () => {
@@ -430,8 +490,6 @@ export function KasirPage() {
 
     try {
       await holdTransactionMutation.mutateAsync({
-        cabangId: DEMO_CABANG_ID,
-        kasirId: KASIR_ID,
         tingkatHarga,
         diskonTotal,
         items: cartItems.map((item) => ({
@@ -455,7 +513,7 @@ export function KasirPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Gagal menahan transaksi');
     }
-  }, [cartItems, tingkatHarga, diskonTotal, holdTransactionMutation, KASIR_ID]);
+  }, [cartItems, tingkatHarga, diskonTotal, holdTransactionMutation]);
 
   // Resume held transaction: load items back into cart
   const handleResumeTransaction = useCallback((trx: TransaksiWithDetails) => {
@@ -571,6 +629,22 @@ export function KasirPage() {
               </span>
             </div>
           </div>
+
+          {/* Antrean transaksi offline (IndexedDB) */}
+          {pendingOffline.length > 0 && (
+            <div className="mx-3 mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+              <div className="text-sm text-amber-900">
+                <span className="font-semibold">{pendingOffline.length} transaksi</span> offline
+              </div>
+              <button
+                onClick={handleRetryPending}
+                disabled={isRetryingPending}
+                className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isRetryingPending ? 'Mengirim...' : 'Kirim ulang'}
+              </button>
+            </div>
+          )}
 
           {/* Cart Items */}
           <div className="flex-1 overflow-y-auto">

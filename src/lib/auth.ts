@@ -4,6 +4,47 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db/prisma';
 
+// ===========================================
+// Rate limiting login (in-memory, per email)
+// 5 percobaan gagal -> lockout 15 menit.
+// Catatan: cukup untuk single-instance; untuk
+// multi-instance gunakan Redis (upstash/ratelimit).
+// ===========================================
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+function checkRateLimit(key: string): void {
+  const now = Date.now();
+  const attempt = loginAttempts.get(key);
+
+  if (attempt?.lockedUntil && attempt.lockedUntil > now) {
+    const menit = Math.ceil((attempt.lockedUntil - now) / 60000);
+    throw new Error(`Terlalu banyak percobaan gagal. Coba lagi dalam ${menit} menit.`);
+  }
+}
+
+function recordFailedAttempt(key: string): void {
+  const now = Date.now();
+  const attempt = loginAttempts.get(key);
+
+  if (!attempt || (attempt.lockedUntil && attempt.lockedUntil <= now)) {
+    loginAttempts.set(key, { count: 1, lockedUntil: 0 });
+    return;
+  }
+
+  attempt.count += 1;
+  if (attempt.count >= MAX_ATTEMPTS) {
+    attempt.lockedUntil = now + LOCKOUT_MS;
+    attempt.count = 0;
+  }
+}
+
+function clearRateLimit(key: string): void {
+  loginAttempts.delete(key);
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma) as never,
   session: {
@@ -29,10 +70,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error('Email wajib diisi');
         }
 
-        const email = credentials.email as string;
+        const email = (credentials.email as string).toLowerCase();
         const password = credentials.password as string;
         const pin = credentials.pin as string;
         const loginMode = (credentials.loginMode as string) || 'password';
+
+        // Cek rate limit sebelum proses apa pun
+        checkRateLimit(email);
 
         // Find user by email
         const user = await prisma.user.findUnique({
@@ -49,6 +93,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
 
         if (!user) {
+          // Konsumsi rate limit agar email tak terdaftar tidak bisa diprobing tanpa batas
+          recordFailedAttempt(email);
           throw new Error('Email atau password/PIN salah');
         }
 
@@ -56,30 +102,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error('Akun tidak aktif. Hubungi administrator.');
         }
 
+        const failLogin = (): never => {
+          recordFailedAttempt(email);
+          throw new Error('Email atau password/PIN salah');
+        };
+
         // Validate based on login mode
         if (loginMode === 'pin') {
           // PIN login (PIN di-hash dengan bcrypt)
-          if (!pin) {
-            throw new Error('PIN wajib diisi');
-          }
-          if (!user.pin) {
-            throw new Error('Email atau password/PIN salah');
-          }
-          const pinValid = await bcrypt.compare(pin, user.pin);
-          if (!pinValid) {
-            throw new Error('Email atau password/PIN salah');
+          if (!pin || !user.pin || !(await bcrypt.compare(pin, user.pin))) {
+            failLogin();
           }
         } else {
           // Password login
-          if (!password) {
-            throw new Error('Email atau password/PIN salah');
-          }
-
-          const isValidPassword = await bcrypt.compare(password, user.password);
-          if (!isValidPassword) {
-            throw new Error('Email atau password/PIN salah');
+          if (!password || !(await bcrypt.compare(password, user.password))) {
+            failLogin();
           }
         }
+
+        // Login sukses: reset pencacat percobaan
+        clearRateLimit(email);
 
         // Update last login
         await prisma.user.update({

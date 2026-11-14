@@ -201,8 +201,9 @@ export async function deleteProduct(id: string): Promise<ApiResponse<null>> {
 // ==========================================
 
 export interface CreateTransactionParams {
-  cabangId: string;
-  kasirId: string;
+  /** Opsional: server selalu menggunakan session. Tipe tetap ada untuk kompatibilitas. */
+  cabangId?: string;
+  kasirId?: string;
   pelangganId?: string | null;
   tingkatHarga: number;
   metodeBayar: 'TUNAI' | 'QRIS' | 'TRANSFER' | 'HUTANG' | 'SPLIT';
@@ -234,8 +235,9 @@ export async function createTransaction(
 }
 
 export interface HoldTransactionParams {
-  cabangId: string;
-  kasirId: string;
+  /** Opsional: server selalu menggunakan session. */
+  cabangId?: string;
+  kasirId?: string;
   tingkatHarga: number;
   catatan?: string | null;
   diskonTotal: number;
