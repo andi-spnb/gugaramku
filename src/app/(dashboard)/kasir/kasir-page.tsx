@@ -16,11 +16,14 @@ import { TotalDiscountDialog } from '@/components/kasir/total-discount-dialog';
 import type { TotalDiscountData } from '@/components/kasir/total-discount-dialog';
 import { HoldListDialog } from '@/components/kasir/hold-list-dialog';
 import { ReceiptDialog, type ReceiptData } from '@/components/kasir/receipt-dialog';
+import { CameraScanDialog } from '@/components/kasir/camera-scan-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { generateUUID } from '@/lib/utils';
 import { getPriceByLevel } from '@/lib/constants/price-levels';
 import { useCreateTransaction, useHoldTransaction, useHeldTransactions, useDeleteHeldTransaction, useSettings } from '@/hooks/use-api';
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner';
+import { getProductByBarcode } from '@/lib/api';
 import { useCurrentUser } from '@/hooks/use-auth';
 import type { CartItem, CartItemUnit, ProdukWithDetails, ProdukSatuan, MetodeBayar, TransaksiWithDetails } from '@/types';
 
@@ -56,6 +59,7 @@ export function KasirPage() {
   const [isHoldListOpen, setIsHoldListOpen] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [isCameraScanOpen, setIsCameraScanOpen] = useState(false);
 
   // API Mutation
   const createTransactionMutation = useCreateTransaction();
@@ -177,6 +181,37 @@ export function KasirPage() {
 
     toast.success(`${produk.nama} ditambahkan ke keranjang`);
   }, [cartItems, tingkatHarga]);
+
+  // Handle barcode scanned (dari alat scanner fisik atau kamera)
+  const handleBarcodeScanned = useCallback(async (barcode: string) => {
+    const kode = barcode.trim();
+    if (!kode) return;
+
+    try {
+      const response = await getProductByBarcode(kode);
+      const produk = response.data;
+
+      if (!produk) {
+        toast.error(`Produk dengan barcode "${kode}" tidak ditemukan`);
+        return;
+      }
+
+      const defaultSatuan =
+        produk.produkSatuan?.find((s) => s.isDefault) || produk.produkSatuan?.[0];
+
+      if (!defaultSatuan) {
+        toast.error(`Produk "${produk.nama}" belum memiliki satuan/harga`);
+        return;
+      }
+
+      handleAddProduct(produk, defaultSatuan, 1);
+    } catch {
+      toast.error('Gagal mencari produk berdasarkan barcode');
+    }
+  }, [handleAddProduct]);
+
+  // Global listener untuk alat scanner barcode fisik (keyboard wedge)
+  useBarcodeScanner(handleBarcodeScanned, { enabled: !isCameraScanOpen });
 
   // Remove item from cart
   const handleRemoveItem = useCallback((itemId: string) => {
@@ -517,6 +552,7 @@ export function KasirPage() {
             onSelectProduct={handleAddProduct}
             onQuickSale={() => setIsQuickSaleOpen(true)}
             tingkatHarga={tingkatHarga}
+            onCameraScan={() => setIsCameraScanOpen(true)}
           />
         </div>
 
@@ -643,6 +679,16 @@ export function KasirPage() {
         }}
         data={lastReceipt}
         settings={settings ?? null}
+      />
+
+      {/* Camera Scan Dialog */}
+      <CameraScanDialog
+        open={isCameraScanOpen}
+        onClose={() => setIsCameraScanOpen(false)}
+        onScan={(barcode) => {
+          setIsCameraScanOpen(false);
+          void handleBarcodeScanned(barcode);
+        }}
       />
     </div>
   );

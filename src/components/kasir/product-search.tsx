@@ -90,9 +90,10 @@ interface ProductSearchProps {
   onSelectProduct: (produk: ProdukWithDetails, satuan: ProdukSatuan, jumlah?: number) => void;
   onQuickSale: () => void;
   tingkatHarga: number;
+  onCameraScan?: () => void;
 }
 
-export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga }: ProductSearchProps) {
+export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga, onCameraScan }: ProductSearchProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -185,7 +186,9 @@ export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga }: Pr
           </div>
           <button
             type="button"
+            onClick={onCameraScan}
             className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            title="Scan barcode via kamera"
           >
             <Camera className="h-5 w-5" />
             <span className="hidden sm:inline">Scan</span>

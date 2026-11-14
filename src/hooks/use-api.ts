@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  searchProducts, 
+import {
+  searchProducts,
   getProduct,
+  getProductByBarcode,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -206,6 +207,21 @@ export function useProduct(id: string, options?: { enabled?: boolean }) {
       return response.data!;
     },
     enabled: options?.enabled ?? !!id,
+  });
+}
+
+export function useProductByBarcode(barcode: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['products', 'barcode', barcode],
+    queryFn: async () => {
+      const response = await getProductByBarcode(barcode);
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal mencari produk');
+      }
+      return response.data; // null jika tidak ditemukan
+    },
+    enabled: enabled && barcode.length > 0,
+    staleTime: 30 * 1000,
   });
 }
 
