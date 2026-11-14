@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, ProdukWithDetails, PaginationMeta } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { createProductSchema } from '@/lib/validation/schemas';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -13,80 +15,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate required fields
-    if (!body.nama || !body.satuanDasar || !body.satuan?.length) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Data produk tidak lengkap',
-          details: [
-            ...(!body.nama ? [{ field: 'nama', message: 'Nama produk harus diisi' }] : []),
-            ...(!body.satuanDasar ? [{ field: 'satuanDasar', message: 'Satuan dasar harus diisi' }] : []),
-            ...(!body.satuan?.length ? [{ field: 'satuan', message: 'Minimal 1 satuan diperlukan' }] : []),
-          ],
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(createProductSchema, body);
+    if (!parsed.ok) return parsed.response;
 
-    // Validate numeric values
-    const hargaModal = Number(body.hargaModal || 0);
-    if (!Number.isFinite(hargaModal) || hargaModal < 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Harga modal tidak boleh negatif',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const stokAwal = Number(body.stokAwal || 0);
-    if (!Number.isFinite(stokAwal) || stokAwal < 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Stok awal tidak boleh negatif',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    for (const s of body.satuan) {
-      const konversi = Number(s.konversi);
-      if (!Number.isFinite(konversi) || konversi < 1) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Konversi minimal 1',
-          },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
-
-      for (const key of ['harga1', 'harga2', 'harga3', 'harga4'] as const) {
-        const val = s[key];
-        if (val !== undefined && val !== null && (!Number.isFinite(Number(val)) || Number(val) < 0)) {
-          const response: ApiResponse<null> = {
-            success: false,
-            error: {
-              code: 'VALIDATION_ERROR',
-              message: `${key} tidak boleh negatif`,
-            },
-          };
-          return NextResponse.json(response, { status: 400 });
-        }
-      }
-    }
+    const { nama, satuan, barcode, kategoriId, satuanDasar, hargaModal, stokAwal } = parsed.data;
+    // Field di luar schema (schema strict) — dibaca dari body mentah
+    const { gambar, cabangId, stokMinimum } = body as {
+      gambar?: string | null;
+      cabangId?: string;
+      stokMinimum?: number;
+    };
 
     // Check barcode uniqueness
-    if (body.barcode) {
+    if (barcode) {
       const barcodeExists = await prisma.produk.findUnique({
-        where: { barcode: body.barcode },
+        where: { barcode },
       });
       
       if (barcodeExists) {
@@ -106,18 +49,18 @@ export async function POST(request: NextRequest) {
       // Create product
       const produk = await tx.produk.create({
         data: {
-          barcode: body.barcode || null,
-          nama: body.nama,
-          kategoriId: body.kategoriId || null,
-          hargaModal: body.hargaModal || 0,
-          satuanDasar: body.satuanDasar,
-          gambar: body.gambar || null,
+          barcode: barcode || null,
+          nama,
+          kategoriId: kategoriId || null,
+          hargaModal: hargaModal || 0,
+          satuanDasar,
+          gambar: gambar || null,
           isActive: true,
         },
       });
 
       // Create satuan
-      for (let i = 0; i < body.satuan.length; i++) {
+      for (let i = 0; i < satuan.length; i++) {
         const s = body.satuan[i];
         await tx.produkSatuan.create({
           data: {
@@ -135,13 +78,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Create initial stock if cabangId provided
-      if (body.cabangId) {
+      if (cabangId) {
         await tx.stok.create({
           data: {
             produkId: produk.id,
-            cabangId: body.cabangId,
-            jumlah: body.stokAwal || 0,
-            stokMinimum: body.stokMinimum || 0,
+            cabangId,
+            jumlah: stokAwal || 0,
+            stokMinimum: stokMinimum || 0,
           },
         });
       }

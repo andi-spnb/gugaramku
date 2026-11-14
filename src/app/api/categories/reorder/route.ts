@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { reorderCategoriesSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,20 +14,12 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!Array.isArray(body.orders)) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Data urutan tidak valid',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(reorderCategoriesSchema, body);
+    if (!parsed.ok) return parsed.response;
 
     // Update each category's order
     await prisma.$transaction(
-      body.orders.map((item: { id: string; urutan: number }) =>
+      parsed.data.orders.map((item) =>
         prisma.kategori.update({
           where: { id: item.id },
           data: { urutan: item.urutan },

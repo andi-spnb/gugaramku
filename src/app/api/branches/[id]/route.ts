@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { updateBranchSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,13 +87,10 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    const {
-      kode,
-      nama,
-      alamat,
-      telepon,
-      isActive,
-    } = body;
+    const parsed = parseBody(updateBranchSchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const { kode, nama, alamat, telepon, isActive } = parsed.data;
 
     // Check if branch exists
     const existingBranch = await prisma.cabang.findUnique({

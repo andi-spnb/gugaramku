@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, Kategori } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { createCategorySchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,20 +55,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.nama) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Nama kategori harus diisi',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(createCategorySchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const { nama, deskripsi } = parsed.data;
 
     // Check name uniqueness
     const exists = await prisma.kategori.findUnique({
-      where: { nama: body.nama },
+      where: { nama },
     });
 
     if (exists) {
@@ -87,8 +83,8 @@ export async function POST(request: NextRequest) {
 
     const category = await prisma.kategori.create({
       data: {
-        nama: body.nama,
-        deskripsi: body.deskripsi || null,
+        nama,
+        deskripsi: deskripsi || null,
         urutan: (maxUrutan._max.urutan || 0) + 1,
         isActive: true,
       },

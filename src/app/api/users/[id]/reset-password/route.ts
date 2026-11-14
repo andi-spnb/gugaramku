@@ -4,6 +4,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { resetPasswordSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,15 +18,11 @@ export async function POST(
     if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
-    const { newPassword } = body;
 
-    // Validate password
-    if (!newPassword || newPassword.length < 6) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Password minimal 6 karakter' },
-      }, { status: 400 });
-    }
+    const parsed = parseBody(resetPasswordSchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const { newPassword: password } = parsed.data;
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -39,7 +37,7 @@ export async function POST(
     }
 
     // Hash password baru sebelum disimpan
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Update password
     await prisma.user.update({

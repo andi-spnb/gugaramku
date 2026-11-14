@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, Kategori } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { updateCategorySchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,16 +69,8 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    if (!body.nama?.trim()) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Nama kategori harus diisi',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(updateCategorySchema, body);
+    if (!parsed.ok) return parsed.response;
 
     // Check if category exists
     const existing = await prisma.kategori.findUnique({
@@ -95,10 +89,10 @@ export async function PUT(
     }
 
     // Check name uniqueness (exclude current)
-    if (body.nama !== existing.nama) {
+    if (parsed.data.nama && parsed.data.nama !== existing.nama) {
       const nameExists = await prisma.kategori.findFirst({
         where: {
-          nama: body.nama,
+          nama: parsed.data.nama,
           id: { not: params.id },
         },
       });
@@ -118,10 +112,10 @@ export async function PUT(
     const category = await prisma.kategori.update({
       where: { id: params.id },
       data: {
-        nama: body.nama.trim(),
-        deskripsi: body.deskripsi?.trim() || null,
-        urutan: body.urutan ?? existing.urutan,
-        isActive: body.isActive ?? existing.isActive,
+        nama: parsed.data.nama?.trim() ?? existing.nama,
+        deskripsi: parsed.data.deskripsi?.trim() || null,
+        urutan: parsed.data.urutan ?? existing.urutan,
+        isActive: parsed.data.isActive ?? existing.isActive,
       },
     });
 

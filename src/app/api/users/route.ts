@@ -4,6 +4,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { createUserSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,45 +119,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const {
-      nama,
-      email,
-      password,
-      pin,
-      role = 'KASIR',
-      cabangId,
-    } = body;
+    const parsed = parseBody(createUserSchema, body);
+    if (!parsed.ok) return parsed.response;
 
-    // Validate required fields
-    if (!nama || nama.trim() === '') {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Nama harus diisi' },
-      }, { status: 400 });
-    }
-
-    if (!email || email.trim() === '') {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Email harus diisi' },
-      }, { status: 400 });
-    }
-
-    if (!password || password.length < 6) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Password minimal 6 karakter' },
-      }, { status: 400 });
-    }
-
-    // Validate role
-    const validRoles = ['OWNER', 'ADMIN_CABANG', 'KASIR'];
-    if (!validRoles.includes(role)) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Role tidak valid' },
-      }, { status: 400 });
-    }
+    const { nama, email, password, pin, role, cabangId } = parsed.data;
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -166,14 +133,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: { code: 'DUPLICATE_ERROR', message: 'Email sudah terdaftar' },
-      }, { status: 400 });
-    }
-
-    // Validate PIN if provided
-    if (pin && (pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin))) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'PIN harus 4-6 digit angka' },
       }, { status: 400 });
     }
 

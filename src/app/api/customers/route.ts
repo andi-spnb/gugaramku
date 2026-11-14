@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { createCustomerSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,37 +80,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.nama?.trim()) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Nama pelanggan harus diisi',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const maxHutang = Number(body.maxHutang || 0);
-    if (!Number.isFinite(maxHutang) || maxHutang < 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Max hutang tidak boleh negatif',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(createCustomerSchema, body);
+    if (!parsed.ok) return parsed.response;
 
     const customer = await prisma.pelanggan.create({
       data: {
-        nama: body.nama.trim(),
-        telepon: body.telepon?.trim() || null,
-        alamat: body.alamat?.trim() || null,
-        kategori: body.kategori || 'RETAIL',
-        maxHutang: body.maxHutang || 0,
-        catatan: body.catatan?.trim() || null,
+        nama: parsed.data.nama.trim(),
+        telepon: parsed.data.telepon?.trim() || null,
+        alamat: parsed.data.alamat?.trim() || null,
+        kategori: parsed.data.kategori || 'RETAIL',
+        maxHutang: parsed.data.maxHutang || 0,
+        catatan: parsed.data.catatan?.trim() || null,
         isActive: true,
       },
     });

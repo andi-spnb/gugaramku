@@ -1,35 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { createTransactionSchema } from '@/lib/validation/schemas';
 import type { ApiResponse, TransaksiWithDetails } from '@/types';
 import { MetodeBayar, StatusTransaksi, StatusSync, Role, KategoriPelanggan } from '@/types';
 import { logActivity } from '@/lib/audit-log';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
-
-// Request body type for creating transaction
-interface CreateTransactionBody {
-  pelangganId?: string | null;
-  tingkatHarga: number;
-  metodeBayar: MetodeBayar;
-  jumlahBayar: number;
-  catatan?: string | null;
-  diskonTotal: number;
-  items: Array<{
-    produkId?: string | null;
-    produkSatuanId?: string | null;
-    namaBarang: string;
-    barcode?: string | null;
-    jumlah: number;
-    satuan: string;
-    konversi: number;
-    hargaModal: number;
-    hargaJual: number;
-    diskon: number;
-    isQuickSale: boolean;
-  }>;
-}
 
 function validationError(
   message: string,
@@ -57,38 +36,16 @@ export async function POST(request: NextRequest) {
     const cabangId = sessionUser.cabangId;
     const kasirId = sessionUser.id;
 
-    const body: CreateTransactionBody = await request.json();
-
-    // Validate required fields
-    if (!cabangId || !body.items?.length) {
-      return validationError('Data transaksi tidak lengkap', [
-        ...(!cabangId ? [{ field: 'cabangId', message: 'Cabang user tidak ditemukan' }] : []),
-        ...(!body.items?.length ? [{ field: 'items', message: 'Minimal 1 item diperlukan' }] : []),
-      ]);
+    if (!cabangId) {
+      return validationError('Cabang user tidak ditemukan');
     }
 
-    if (body.items.length > 200) {
-      return validationError('Terlalu banyak item dalam satu transaksi (maks 200)');
-    }
+    const rawBody: unknown = await request.json();
 
-    // Validasi dasar per item & kumpulkan produk yang perlu diverifikasi harganya
-    for (const item of body.items) {
-      if (!Number.isFinite(item.jumlah) || item.jumlah <= 0) {
-        return validationError(`Jumlah untuk "${item.namaBarang}" harus lebih dari 0`);
-      }
-      if (!item.isQuickSale) {
-        if (!item.produkSatuanId) {
-          return validationError(`Item "${item.namaBarang}" tidak memiliki satuan`);
-        }
-        if (!Number.isFinite(item.diskon) || item.diskon < 0) {
-          return validationError(`Diskon untuk "${item.namaBarang}" tidak valid`);
-        }
-      }
-    }
-
-    if (!Number.isFinite(body.diskonTotal) || body.diskonTotal < 0) {
-      return validationError('Diskon total tidak valid');
-    }
+    // Validasi shape input via Zod
+    const parsed = parseBody(createTransactionSchema, rawBody);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     // Ambil harga resmi dari database untuk item non-quick-sale
     const satuanIds = body.items
@@ -201,16 +158,12 @@ export async function POST(request: NextRequest) {
       return validationError('Diskon total melebihi subtotal');
     }
 
-    // Validasi metode pembayaran
+    // Metode pembayaran & jumlah bayar sudah divalidasi schema (Zod)
     const metodeBayar = body.metodeBayar;
-    if (!['TUNAI', 'QRIS', 'TRANSFER', 'HUTANG'].includes(metodeBayar)) {
-      return validationError('Metode pembayaran tidak valid');
+    if (metodeBayar === 'SPLIT') {
+      return validationError('Metode pembayaran SPLIT belum didukung');
     }
-
-    const jumlahBayar = Number(body.jumlahBayar);
-    if (!Number.isFinite(jumlahBayar) || jumlahBayar < 0) {
-      return validationError('Jumlah bayar tidak valid');
-    }
+    const jumlahBayar = body.jumlahBayar;
 
     // Tunai harus lunas
     if (metodeBayar === 'TUNAI' && jumlahBayar < total) {

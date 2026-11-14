@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { createBranchSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,27 +107,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const {
-      kode,
-      nama,
-      alamat,
-      telepon,
-    } = body;
+    const parsed = parseBody(createBranchSchema, body);
+    if (!parsed.ok) return parsed.response;
 
-    // Validate required fields
-    if (!kode || kode.trim() === '') {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Kode cabang harus diisi' },
-      }, { status: 400 });
-    }
-
-    if (!nama || nama.trim() === '') {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Nama cabang harus diisi' },
-      }, { status: 400 });
-    }
+    const { kode, nama, alamat, telepon } = parsed.data;
 
     // Check if kode already exists
     const existingBranch = await prisma.cabang.findUnique({

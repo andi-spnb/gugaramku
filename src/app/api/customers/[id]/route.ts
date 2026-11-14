@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { updateCustomerSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,16 +67,8 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    if (!body.nama?.trim()) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Nama pelanggan harus diisi',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(updateCustomerSchema, body);
+    if (!parsed.ok) return parsed.response;
 
     const existing = await prisma.pelanggan.findUnique({
       where: { id: params.id },
@@ -94,13 +88,13 @@ export async function PUT(
     const customer = await prisma.pelanggan.update({
       where: { id: params.id },
       data: {
-        nama: body.nama.trim(),
-        telepon: body.telepon?.trim() || null,
-        alamat: body.alamat?.trim() || null,
-        kategori: body.kategori || existing.kategori,
-        maxHutang: body.maxHutang ?? existing.maxHutang,
-        catatan: body.catatan?.trim() || null,
-        isActive: body.isActive ?? existing.isActive,
+        nama: parsed.data.nama?.trim() ?? existing.nama,
+        telepon: parsed.data.telepon?.trim() || null,
+        alamat: parsed.data.alamat?.trim() || null,
+        kategori: parsed.data.kategori || existing.kategori,
+        maxHutang: parsed.data.maxHutang ?? existing.maxHutang,
+        catatan: parsed.data.catatan?.trim() || null,
+        isActive: parsed.data.isActive ?? existing.isActive,
       },
     });
 

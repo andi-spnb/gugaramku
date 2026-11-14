@@ -4,6 +4,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { updateUserSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,14 +81,10 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    const {
-      nama,
-      email,
-      role,
-      pin,
-      cabangId,
-      isActive,
-    } = body;
+    const parsed = parseBody(updateUserSchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const { nama, email, role, pin, cabangId, isActive } = parsed.data;
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -110,27 +108,6 @@ export async function PUT(
         return NextResponse.json({
           success: false,
           error: { code: 'DUPLICATE_ERROR', message: 'Email sudah digunakan' },
-        }, { status: 400 });
-      }
-    }
-
-    // Validate role if provided
-    if (role) {
-      const validRoles = ['OWNER', 'ADMIN_CABANG', 'KASIR'];
-      if (!validRoles.includes(role)) {
-        return NextResponse.json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Role tidak valid' },
-        }, { status: 400 });
-      }
-    }
-
-    // Validate PIN if provided
-    if (pin !== undefined && pin !== null && pin !== '') {
-      if (pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin)) {
-        return NextResponse.json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'PIN harus 4-6 digit angka' },
         }, { status: 400 });
       }
     }

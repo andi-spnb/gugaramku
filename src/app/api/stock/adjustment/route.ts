@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse } from '@/types';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { stockAdjustmentSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,43 +18,20 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { produkId, jumlah, tipe, keterangan } = body;
+    const parsed = parseBody(stockAdjustmentSchema, body);
+    if (!parsed.ok) return parsed.response;
+
+    const { produkId, jumlah, tipe, keterangan } = parsed.data;
 
     // cabangId diambil dari session (bukan body) untuk cegah IDOR lintas cabang
     const cabangId = sessionUser.cabangId;
 
-    // Validate
-    if (!produkId || !cabangId || jumlah === undefined || !tipe) {
+    if (!cabangId) {
       const response: ApiResponse<null> = {
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Data adjustment tidak lengkap',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    // Validasi jumlah
-    if (!Number.isFinite(Number(jumlah)) || Number(jumlah) <= 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Jumlah adjustment harus lebih dari 0',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    // Valid tipe: ADJUSTMENT_PLUS, ADJUSTMENT_MINUS, OPNAME, RUSAK, EXPIRED
-    const validTipes = ['ADJUSTMENT_PLUS', 'ADJUSTMENT_MINUS', 'OPNAME', 'RUSAK', 'EXPIRED'];
-    if (!validTipes.includes(tipe)) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Tipe adjustment tidak valid',
         },
       };
       return NextResponse.json(response, { status: 400 });

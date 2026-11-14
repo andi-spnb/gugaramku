@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { updateSettingsSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,6 +84,9 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const parsed = parseBody(updateSettingsSchema, body);
+    if (!parsed.ok) return parsed.response;
+
     const {
       namaToko,
       alamat,
@@ -93,15 +98,7 @@ export async function PUT(request: NextRequest) {
       autoLogoutMenit,
       qrisImage,
       rekeningBank,
-    } = body;
-
-    // Validate required fields
-    if (!namaToko || namaToko.trim() === '') {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Nama toko harus diisi' },
-      }, { status: 400 });
-    }
+    } = parsed.data;
 
     // Get existing settings or create new
     let settings = await prisma.pengaturanToko.findFirst();

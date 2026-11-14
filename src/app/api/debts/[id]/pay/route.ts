@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse } from '@/types';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { debtPaySchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,30 +19,10 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { jumlah, metode, catatan } = body;
+    const parsed = parseBody(debtPaySchema, body);
+    if (!parsed.ok) return parsed.response;
 
-    if (!Number.isFinite(Number(jumlah)) || Number(jumlah) <= 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Jumlah pembayaran harus lebih dari 0',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const metodeValid = ['TUNAI', 'QRIS', 'TRANSFER'].includes(metode || 'TUNAI');
-    if (!metodeValid) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Metode pembayaran tidak valid',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const { jumlah, metode, catatan } = parsed.data;
 
     const result = await prisma.$transaction(async (tx) => {
       // Baca hutang DI DALAM transaction untuk cegah race (dua pembayaran bersamaan)

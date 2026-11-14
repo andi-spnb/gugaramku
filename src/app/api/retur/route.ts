@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse } from '@/types';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { createReturSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,42 +179,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    const parsed = parseBody(createReturSchema, body);
+    if (!parsed.ok) return parsed.response;
+
     const {
       transaksiId,
       metodeRefund, // TUNAI, TUKAR_BARANG
       alasan, // RUSAK, SALAH, EXPIRED, LAINNYA
       catatan,
       items, // Array of { detailTransaksiId, jumlah }
-    } = body;
-
-    // Validate required fields
-    if (!transaksiId) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Transaksi harus dipilih' },
-      }, { status: 400 });
-    }
-
-    if (!metodeRefund) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Metode refund harus dipilih' },
-      }, { status: 400 });
-    }
-
-    if (!alasan) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Alasan retur harus dipilih' },
-      }, { status: 400 });
-    }
-
-    if (!items || items.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Pilih minimal 1 item untuk diretur' },
-      }, { status: 400 });
-    }
+    } = parsed.data;
 
     // Get original transaction
     const transaksi = await prisma.transaksi.findUnique({

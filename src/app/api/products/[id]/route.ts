@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, ProdukWithDetails } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { parseBody } from '@/lib/validation/parse';
+import { updateProductSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,58 +112,12 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    // Validate required fields
-    if (!body.nama || !body.satuanDasar || !body.satuan?.length) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Data produk tidak lengkap',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const parsed = parseBody(updateProductSchema, body);
+    if (!parsed.ok) return parsed.response;
 
-    // Validate numeric values
-    const hargaModal = Number(body.hargaModal || 0);
-    if (!Number.isFinite(hargaModal) || hargaModal < 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Harga modal tidak boleh negatif',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    for (const s of body.satuan) {
-      const konversi = Number(s.konversi);
-      if (!Number.isFinite(konversi) || konversi < 1) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Konversi minimal 1',
-          },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
-
-      for (const key of ['harga1', 'harga2', 'harga3', 'harga4'] as const) {
-        const val = s[key];
-        if (val !== undefined && val !== null && (!Number.isFinite(Number(val)) || Number(val) < 0)) {
-          const response: ApiResponse<null> = {
-            success: false,
-            error: {
-              code: 'VALIDATION_ERROR',
-              message: `${key} tidak boleh negatif`,
-            },
-          };
-          return NextResponse.json(response, { status: 400 });
-        }
-      }
-    }
+    const { nama, satuan, barcode, kategoriId, satuanDasar, hargaModal } = parsed.data;
+    // Field di luar schema (schema strict) — dibaca dari body mentah
+    const { gambar, isActive } = body as { gambar?: string | null; isActive?: boolean };
 
     // Check if product exists
     const existing = await prisma.produk.findUnique({
@@ -206,13 +162,13 @@ export async function PUT(
       const produk = await tx.produk.update({
         where: { id: params.id },
         data: {
-          barcode: body.barcode || null,
-          nama: body.nama,
-          kategoriId: body.kategoriId || null,
-          hargaModal: body.hargaModal || 0,
-          satuanDasar: body.satuanDasar,
-          gambar: body.gambar || null,
-          isActive: body.isActive ?? true,
+          barcode: barcode || null,
+          nama,
+          kategoriId: kategoriId || null,
+          hargaModal: hargaModal || 0,
+          satuanDasar,
+          gambar: gambar || null,
+          isActive: isActive ?? true,
         },
       });
 
@@ -222,7 +178,7 @@ export async function PUT(
       });
 
       // Create new satuan
-      for (let i = 0; i < body.satuan.length; i++) {
+      for (let i = 0; i < satuan!.length; i++) {
         const s = body.satuan[i];
         await tx.produkSatuan.create({
           data: {

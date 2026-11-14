@@ -4,29 +4,10 @@ import type { ApiResponse, TransaksiWithDetails } from '@/types';
 import { MetodeBayar, StatusSync } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { holdTransactionSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
-
-interface HoldTransactionBody {
-  cabangId: string;
-  kasirId: string;
-  tingkatHarga: number;
-  catatan?: string | null;
-  diskonTotal: number;
-  items: Array<{
-    produkId?: string | null;
-    produkSatuanId?: string | null;
-    namaBarang: string;
-    barcode?: string | null;
-    jumlah: number;
-    satuan: string;
-    konversi: number;
-    hargaModal: number;
-    hargaJual: number;
-    diskon: number;
-    isQuickSale: boolean;
-  }>;
-}
 
 // POST /api/transactions/hold - Hold (simpan sementara) transaksi
 export async function POST(request: NextRequest) {
@@ -35,9 +16,12 @@ export async function POST(request: NextRequest) {
   const user = authResult.user;
 
   try {
-    const body: HoldTransactionBody = await request.json();
+    const rawBody: unknown = await request.json();
+    const parsed = parseBody(holdTransactionSchema, rawBody);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
-    if (!user.cabangId || !user.id || !body.items?.length) {
+    if (!user.cabangId || !user.id) {
       const response: ApiResponse<null> = {
         success: false,
         error: {
@@ -80,22 +64,24 @@ export async function POST(request: NextRequest) {
     // Stok TIDAK dikurangi, kas TIDAK diubah
     const result = await prisma.$transaction(async (tx) => {
       // Generate hold number: HLD-YYYYMMDD-XXXX
+      // PENTING: dateStr & rentang hari HARUS memakai basis waktu yang sama (lokal).
       const today = new Date();
-      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}${mm}${dd}`;
+      const startOfDay = new Date(yyyy, today.getMonth(), today.getDate());
       const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-      const count = await tx.transaksi.count({
-        where: {
-          cabangId,
-          tanggal: {
-            gte: startOfDay,
-            lt: endOfDay,
-          },
-        },
+      // Ambil nomor HLD terakhir hari ini (bukan count) agar tidak tabrakan
+      const lastToday = await tx.transaksi.findFirst({
+        where: { cabangId, nomor: { startsWith: `HLD-${dateStr}-` } },
+        orderBy: { nomor: 'desc' },
+        select: { nomor: true },
       });
+      const lastSeq = lastToday ? parseInt(lastToday.nomor.split('-').pop() || '0', 10) : 0;
 
-      const nomor = `HLD-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+      const nomor = `HLD-${dateStr}-${String((Number.isNaN(lastSeq) ? 0 : lastSeq) + 1).padStart(4, '0')}`;
 
       return tx.transaksi.create({
         data: {

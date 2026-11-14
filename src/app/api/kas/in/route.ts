@@ -3,6 +3,8 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
 import { logActivity } from '@/lib/audit-log';
+import { parseBody } from '@/lib/validation/parse';
+import { kasMutationSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,38 +27,20 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const parsed = parseBody(kasMutationSchema, body);
+    if (!parsed.ok) return parsed.response;
+
     const {
       kategori,
       nominal,
       keterangan,
+    } = parsed.data;
+    const {
       referensiTipe,
       referensiId,
-    } = body;
+    } = body as { referensiTipe?: string; referensiId?: string };
     const cabangId = user.cabangId;
     const userId = user.id;
-
-    // Validate required fields
-    if (!kategori) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Kategori harus diisi',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (!nominal || nominal <= 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Nominal harus lebih dari 0',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
 
     // Get or create kas for branch, then update saldo and create mutation
     // atomically (interactive transaction prevents race conditions)
