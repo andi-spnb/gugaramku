@@ -15,11 +15,12 @@ import type { ItemDiscountData } from '@/components/kasir/item-discount-dialog';
 import { TotalDiscountDialog } from '@/components/kasir/total-discount-dialog';
 import type { TotalDiscountData } from '@/components/kasir/total-discount-dialog';
 import { HoldListDialog } from '@/components/kasir/hold-list-dialog';
+import { ReceiptDialog, type ReceiptData } from '@/components/kasir/receipt-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { generateUUID } from '@/lib/utils';
 import { getPriceByLevel } from '@/lib/constants/price-levels';
-import { useCreateTransaction, useHoldTransaction, useHeldTransactions, useDeleteHeldTransaction } from '@/hooks/use-api';
+import { useCreateTransaction, useHoldTransaction, useHeldTransactions, useDeleteHeldTransaction, useSettings } from '@/hooks/use-api';
 import { useCurrentUser } from '@/hooks/use-auth';
 import type { CartItem, CartItemUnit, ProdukWithDetails, ProdukSatuan, MetodeBayar, TransaksiWithDetails } from '@/types';
 
@@ -53,12 +54,15 @@ export function KasirPage() {
   const [isConfirmChangeLevelOpen, setIsConfirmChangeLevelOpen] = useState(false);
   const [pendingTingkatHarga, setPendingTingkatHarga] = useState<number | null>(null);
   const [isHoldListOpen, setIsHoldListOpen] = useState(false);
+  const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
   // API Mutation
   const createTransactionMutation = useCreateTransaction();
   const holdTransactionMutation = useHoldTransaction();
   const deleteHeldTransactionMutation = useDeleteHeldTransaction();
   const { data: heldTransactions = [] } = useHeldTransactions(DEMO_CABANG_ID);
+  const { data: settings } = useSettings();
 
   // Calculations
   const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -347,9 +351,31 @@ export function KasirPage() {
     try {
       // Try to save via API
       const result = await createTransactionMutation.mutateAsync(transactionData);
-      
+
+      // Siapkan data struk
+      setLastReceipt({
+        nomor: result.nomor,
+        tanggal: new Date(),
+        items: cartItems.map((item) => ({
+          namaBarang: item.nama,
+          jumlah: item.jumlah,
+          satuan: item.satuan,
+          hargaJual: item.hargaJual,
+          diskon: item.diskon,
+          subtotal: item.subtotal,
+        })),
+        subtotal,
+        diskon: diskonTotal,
+        total,
+        metodeBayar: paymentData.metodeBayar,
+        jumlahBayar: paymentData.jumlahBayar,
+        kembalian: Math.max(0, paymentData.jumlahBayar - total),
+        kasirNama: user?.name || null,
+      });
+      setIsReceiptOpen(true);
+
       toast.success(`Transaksi ${result.nomor} berhasil!`);
-      
+
       // Reset cart
       setCartItems([]);
       setDiskonTotal(0);
@@ -357,16 +383,17 @@ export function KasirPage() {
     } catch (error) {
       // API failed - for now just show success and reset (offline mode)
       console.error('Transaction API error:', error);
+
       
       // In production, save to IndexedDB for later sync
       toast.success('Transaksi berhasil! (offline mode)');
-      
+
       // Reset cart
       setCartItems([]);
       setDiskonTotal(0);
       setIsPaymentOpen(false);
     }
-  }, [tingkatHarga, cartItems, diskonTotal, createTransactionMutation, KASIR_ID]);
+  }, [tingkatHarga, cartItems, diskonTotal, subtotal, total, createTransactionMutation, KASIR_ID, user]);
 
   // Hold transaction (simpan sementara)
   const handleHoldTransaction = useCallback(async () => {
@@ -605,6 +632,17 @@ export function KasirPage() {
         onResume={handleResumeTransaction}
         onDelete={handleDeleteHeld}
         isDeleting={deleteHeldTransactionMutation.isPending}
+      />
+
+      {/* Receipt Dialog (struk setelah pembayaran) */}
+      <ReceiptDialog
+        open={isReceiptOpen}
+        onClose={() => {
+          setIsReceiptOpen(false);
+          setLastReceipt(null);
+        }}
+        data={lastReceipt}
+        settings={settings ?? null}
       />
     </div>
   );

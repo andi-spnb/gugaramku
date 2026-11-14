@@ -167,7 +167,7 @@
   }
 }
 
-/* Print styles for receipts */
+/* Print styles for receipts: hanya cetak area struk */
 @media print {
   @page {
     size: 58mm auto;
@@ -178,6 +178,30 @@
     font-family: 'Courier New', monospace;
     font-size: 10px;
     line-height: 1.2;
+    background: white !important;
+  }
+
+  /* Sembunyikan seluruh halaman */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Tampilkan hanya area struk dan posisinya di kiri-atas */
+  .receipt-print-area,
+  .receipt-print-area * {
+    visibility: visible !important;
+  }
+
+  .receipt-print-area {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 2mm !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   .no-print {
@@ -186,16 +210,5 @@
 
   .print-only {
     display: block !important;
-  }
-}
-
-/* Receipt 80mm */
-@media print and (min-width: 70mm) {
-  @page {
-    size: 80mm auto;
-  }
-
-  body {
-    font-size: 12px;
   }
 }
