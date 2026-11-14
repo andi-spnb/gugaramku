@@ -29,6 +29,15 @@ export function useBarcodeScanner(
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Lewati bila user sedang fokus mengetik di input/textarea/select
+      const target = e.target as HTMLElement | null;
+      const isTypingElement =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+
       const now = Date.now();
 
       // Jika gap terlalu lama, reset buffer (bukan scanner, ketikan manusia)
@@ -36,6 +45,12 @@ export function useBarcodeScanner(
         bufferRef.current = '';
       }
       lastKeyTimeRef.current = now;
+
+      if (isTypingElement) {
+        // Tetap reset buffer saat mengetik di input supaya tidak tercampur
+        bufferRef.current = '';
+        return;
+      }
 
       // Enter = akhir scan
       if (e.key === 'Enter') {
@@ -45,6 +60,12 @@ export function useBarcodeScanner(
           e.preventDefault();
           onScan(barcode);
         }
+        return;
+      }
+
+      // Backspace = hapus karakter terakhir dari buffer
+      if (e.key === 'Backspace') {
+        bufferRef.current = bufferRef.current.slice(0, -1);
         return;
       }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
     const { newPassword } = body;

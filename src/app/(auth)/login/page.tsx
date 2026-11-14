@@ -12,7 +12,12 @@ type LoginMode = 'password' | 'pin';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/kasir';
+  const rawCallbackUrl = searchParams.get('callbackUrl') || '/kasir';
+  // Validasi callbackUrl hanya path relatif internal (cegah open redirect)
+  const callbackUrl =
+    rawCallbackUrl.startsWith('/') && !rawCallbackUrl.startsWith('//')
+      ? rawCallbackUrl
+      : '/kasir';
   
   const [mode, setMode] = useState<LoginMode>('password');
   const [isLoading, setIsLoading] = useState(false);
@@ -71,7 +76,9 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        toast.error(result.error);
+        // NextAuth membungkus semua error Credentials sebagai 'CredentialsSignin'
+        // Tampilkan pesan generik yang informatif
+        toast.error('Email, password, atau PIN salah.');
         return;
       }
 

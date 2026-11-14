@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Banknote, QrCode, CreditCard, Loader2 } from 'lucide-react';
 import { cn, formatRupiah, parseRupiah } from '@/lib/utils';
 
@@ -21,6 +21,13 @@ export function PaymentDialog({ open, onClose, total, onConfirm }: PaymentDialog
   const jumlahBayarNum = parseRupiah(jumlahBayar) || 0;
   const kembalian = jumlahBayarNum - total;
   const isValid = metodeBayar === 'TUNAI' ? jumlahBayarNum >= total : true;
+
+  // Sinkronkan jumlah bayar dengan total terbaru saat dialog dibuka
+  useEffect(() => {
+    if (open) {
+      setJumlahBayar(total.toString());
+    }
+  }, [open, total]);
 
   const handleSubmit = async () => {
     if (!isValid) return;

@@ -49,7 +49,8 @@ export default auth((req) => {
 
   // Cek akses berdasarkan role
   if (isLoggedIn && userRole && !isPublicRoute) {
-    const allowedRoutes = roleRoutes[userRole] || [];
+    // Role tidak dikenal: perlakukan seperti KASIR untuk cegah redirect loop
+    const allowedRoutes = roleRoutes[userRole] || roleRoutes.KASIR;
     
     // OWNER bisa akses semua
     if (allowedRoutes.includes('*')) {

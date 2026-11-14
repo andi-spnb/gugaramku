@@ -1,23 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/kas/in - Record cash in
 export async function POST(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
+    if (!authResult.ok) return authResult.response;
+    const user = authResult.user;
+
+    if (!user.cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Cabang tidak ditemukan pada user',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
   try {
     const body = await request.json();
 
     const {
-      cabangId = 'demo-cabang-001',
       kategori,
       nominal,
       keterangan,
-      userId = 'demo-user-001',
       referensiTipe,
       referensiId,
     } = body;
+    const cabangId = user.cabangId;
+    const userId = user.id;
 
     // Validate required fields
     if (!kategori) {
@@ -42,52 +57,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response, { status: 400 });
     }
 
-    // Get or create kas for branch
-    let kas = await prisma.kas.findUnique({
-      where: { cabangId },
-    });
-
-    if (!kas) {
-      kas = await prisma.kas.create({
-        data: {
-          cabangId,
-          saldo: 0,
-        },
+    // Get or create kas for branch, then update saldo and create mutation
+    // atomically (interactive transaction prevents race conditions)
+    const [mutasi, updatedKas] = await prisma.$transaction(async (tx) => {
+      let kas = await tx.kas.findUnique({
+        where: { cabangId },
       });
-    }
 
-    const saldoSebelum = kas.saldo;
-    const saldoSesudah = saldoSebelum + nominal;
+      if (!kas) {
+        kas = await tx.kas.create({
+          data: {
+            cabangId,
+            saldo: 0,
+          },
+        });
+      }
 
-    // Create mutation and update saldo in transaction
-    const [mutasi, updatedKas] = await prisma.$transaction([
-      prisma.kasMutasi.create({
-        data: {
-          cabangId,
-          jenis: 'MASUK',
-          kategori,
-          nominal,
-          saldoSebelum,
-          saldoSesudah,
-          keterangan: keterangan || null,
-          referensiTipe: referensiTipe || null,
-          referensiId: referensiId || null,
-          userId,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              nama: true,
+      const saldoSebelum = kas.saldo;
+      const saldoSesudah = saldoSebelum + nominal;
+
+      return [
+        await tx.kasMutasi.create({
+          data: {
+            cabangId,
+            jenis: 'MASUK',
+            kategori,
+            nominal,
+            saldoSebelum,
+            saldoSesudah,
+            keterangan: keterangan || null,
+            referensiTipe: referensiTipe || null,
+            referensiId: referensiId || null,
+            userId,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                nama: true,
+              },
             },
           },
-        },
-      }),
-      prisma.kas.update({
-        where: { cabangId },
-        data: { saldo: saldoSesudah },
-      }),
-    ]);
+        }),
+        await tx.kas.update({
+          where: { cabangId },
+          data: { saldo: saldoSesudah },
+        }),
+      ];
+    });
 
     const responseData = {
       mutasi: {

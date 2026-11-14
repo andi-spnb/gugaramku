@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/kas - Get kas balance for a branch
 export async function GET(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
+    if (!authResult.ok) return authResult.response;
+    const user = authResult.user;
+
+    if (!user.cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Cabang tidak ditemukan pada user',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
   try {
-    const { searchParams } = new URL(request.url);
-    const cabangId = searchParams.get('cabangId') || 'demo-cabang-001';
+    const cabangId = user.cabangId;
 
     // Get or create kas for branch
     let kas = await prisma.kas.findUnique({

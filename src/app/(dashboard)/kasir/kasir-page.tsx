@@ -109,13 +109,11 @@ export function KasirPage() {
     toast.success(`Tingkat harga diubah ke ${DUMMY_PRICE_LEVELS.find(l => l.tingkat === pendingTingkatHarga)?.nama}`);
   }, [pendingTingkatHarga]);
 
-  // Helper function to get price from item based on level
+  // Helper: harga item berdasarkan tingkat dari daftar satuan asli produk
   const getPriceFromItem = (item: CartItem, level: number): number => {
-    // Dalam implementasi nyata, ini akan mengambil dari data produk
-    // Untuk sekarang, kita simulasi dengan mengurangi harga per level
-    const basePrice = item.hargaJual;
-    const discount = (level - 1) * (basePrice * 0.05); // 5% per level
-    return Math.round(basePrice - discount);
+    const unit = item.availableUnits?.find((u) => u.id === item.produkSatuanId);
+    if (!unit) return item.hargaJual; // quick sale: harga tetap
+    return getPriceByLevel(unit, level);
   };
 
   // Add product to cart
@@ -416,16 +414,12 @@ export function KasirPage() {
       setDiskonTotal(0);
       setIsPaymentOpen(false);
     } catch (error) {
-      // API failed - for now just show success and reset (offline mode)
+      // API gagal: JANGAN kosongkan keranjang, biarkan kasir mencoba lagi.
+      // (Penyimpanan offline ke IndexedDB akan diimplementasikan terpisah)
       console.error('Transaction API error:', error);
-
-      
-      // In production, save to IndexedDB for later sync
-      toast.success('Transaksi berhasil! (offline mode)');
-
-      // Reset cart
-      setCartItems([]);
-      setDiskonTotal(0);
+      toast.error(
+        'Gagal menyimpan transaksi. Keranjang tetap ada, coba bayar ulang atau periksa koneksi.'
+      );
       setIsPaymentOpen(false);
     }
   }, [tingkatHarga, cartItems, diskonTotal, subtotal, total, createTransactionMutation, KASIR_ID, user]);

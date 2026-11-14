@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
+import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -14,14 +15,25 @@ function generateReturNumber(): string {
 
 // GET /api/retur - Get retur list
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuth();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const { searchParams } = new URL(request.url);
-    const cabangId = searchParams.get('cabangId') || 'demo-cabang-001';
     const search = searchParams.get('search') || '';
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
+
+    const cabangId = authResult.user.cabangId;
+    if (!cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Cabang user tidak ditemukan' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
 
     // Build where clause
     const where: Record<string, unknown> = {
@@ -148,13 +160,24 @@ export async function GET(request: NextRequest) {
 
 // POST /api/retur - Create new retur
 export async function POST(request: NextRequest) {
+  const authResult = await requireAuth();
+  if (!authResult.ok) return authResult.response;
+
   try {
     const body = await request.json();
 
+    const cabangId = authResult.user.cabangId;
+    const userId = authResult.user.id;
+
+    if (!cabangId) {
+      return NextResponse.json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Cabang user tidak ditemukan' },
+      }, { status: 400 });
+    }
+
     const {
       transaksiId,
-      cabangId = 'demo-cabang-001',
-      userId = 'demo-user-001',
       metodeRefund, // TUNAI, TUKAR_BARANG
       alasan, // RUSAK, SALAH, EXPIRED, LAINNYA
       catatan,
@@ -212,6 +235,26 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Transaksi asal harus milik cabang user (cegah retur lintas cabang)
+    if (transaksi.cabangId !== cabangId) {
+      return NextResponse.json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Transaksi bukan milik cabang Anda' },
+      }, { status: 403 });
+    }
+
+    // Ambil total retur yang sudah pernah dilakukan per detail transaksi
+    const existingReturDetails = await prisma.returDetail.findMany({
+      where: { detailTransaksiId: { in: items.map((i: { detailTransaksiId: string }) => i.detailTransaksiId) } },
+    });
+    const returSebelumnya = new Map<string, number>();
+    for (const rd of existingReturDetails) {
+      returSebelumnya.set(
+        rd.detailTransaksiId,
+        (returSebelumnya.get(rd.detailTransaksiId) || 0) + Number(rd.jumlah)
+      );
+    }
+
     // Validate items and calculate total refund
     let totalRefund = 0;
     const returDetails: Array<{
@@ -238,7 +281,20 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      const nilaiRefund = (detail.hargaJual - detail.diskon) * item.jumlah;
+      // Cek retur kumulatif: total retur sebelumnya + retur ini tidak boleh melebihi jumlah beli
+      const sudahDiretur = returSebelumnya.get(item.detailTransaksiId) || 0;
+      if (sudahDiretur + item.jumlah > Number(detail.jumlah)) {
+        return NextResponse.json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Total retur untuk ${detail.namaBarang} melebihi jumlah beli (sudah diretur: ${sudahDiretur})`,
+          },
+        }, { status: 400 });
+      }
+
+      // Refund proporsional terhadap subtotal item (bukan harga satuan dikurangi diskon)
+      const nilaiRefund = (item.jumlah / Number(detail.jumlah)) * Number(detail.subtotal);
       totalRefund += nilaiRefund;
 
       returDetails.push({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, Kategori } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const category = await prisma.kategori.findUnique({
       where: { id: params.id },
@@ -59,6 +62,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 
@@ -155,6 +160,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     // Check if category exists
     const existing = await prisma.kategori.findUnique({

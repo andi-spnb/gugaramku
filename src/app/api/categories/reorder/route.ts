@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // PUT /api/categories/reorder - Reorder categories
 export async function PUT(request: NextRequest) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 

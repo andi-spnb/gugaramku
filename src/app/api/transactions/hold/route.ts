@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, TransaksiWithDetails } from '@/types';
 import { MetodeBayar, StatusSync } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,10 +29,14 @@ interface HoldTransactionBody {
 
 // POST /api/transactions/hold - Hold (simpan sementara) transaksi
 export async function POST(request: NextRequest) {
+  const authResult = await requireAuth();
+  if (!authResult.ok) return authResult.response;
+  const user = authResult.user;
+
   try {
     const body: HoldTransactionBody = await request.json();
 
-    if (!body.cabangId || !body.kasirId || !body.items?.length) {
+    if (!user.cabangId || !user.id || !body.items?.length) {
       const response: ApiResponse<null> = {
         success: false,
         error: {
@@ -41,6 +46,8 @@ export async function POST(request: NextRequest) {
       };
       return NextResponse.json(response, { status: 400 });
     }
+    const cabangId = user.cabangId;
+    const kasirId = user.id;
 
     // Calculate totals
     let subtotal = 0;
@@ -68,62 +75,64 @@ export async function POST(request: NextRequest) {
 
     const total = subtotal - body.diskonTotal;
 
-    // Generate hold number: HLD-YYYYMMDD-XXXX
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-
-    const count = await prisma.transaksi.count({
-      where: {
-        cabangId: body.cabangId,
-        tanggal: {
-          gte: startOfDay,
-          lt: endOfDay,
-        },
-      },
-    });
-
-    const nomor = `HLD-${dateStr}-${String(count + 1).padStart(4, '0')}`;
-
     // Create held transaction (status HOLD)
     // Stok TIDAK dikurangi, kas TIDAK diubah
-    const result = await prisma.transaksi.create({
-      data: {
-        nomor,
-        cabangId: body.cabangId,
-        kasirId: body.kasirId,
-        tanggal: new Date(),
-        tingkatHarga: body.tingkatHarga,
-        subtotal,
-        diskon: body.diskonTotal,
-        total,
-        metodeBayar: 'TUNAI',
-        jumlahBayar: 0,
-        kembalian: 0,
-        catatan: body.catatan || null,
-        status: 'HOLD',
-        statusSync: 'SYNCED',
-        detailTransaksi: {
-          create: detailItems,
-        },
-      },
-      include: {
-        kasir: {
-          select: {
-            id: true,
-            nama: true,
-            email: true,
-            role: true,
-            cabangId: true,
-            isActive: true,
-            lastLogin: true,
-            createdAt: true,
-            updatedAt: true,
+    const result = await prisma.$transaction(async (tx) => {
+      // Generate hold number: HLD-YYYYMMDD-XXXX
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+      const count = await tx.transaksi.count({
+        where: {
+          cabangId,
+          tanggal: {
+            gte: startOfDay,
+            lt: endOfDay,
           },
         },
-        detailTransaksi: true,
-      },
+      });
+
+      const nomor = `HLD-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+
+      return tx.transaksi.create({
+        data: {
+          nomor,
+          cabangId,
+          kasirId,
+          tanggal: new Date(),
+          tingkatHarga: body.tingkatHarga,
+          subtotal,
+          diskon: body.diskonTotal,
+          total,
+          metodeBayar: 'TUNAI',
+          jumlahBayar: 0,
+          kembalian: 0,
+          catatan: body.catatan || null,
+          status: 'HOLD',
+          statusSync: 'SYNCED',
+          detailTransaksi: {
+            create: detailItems,
+          },
+        },
+        include: {
+          kasir: {
+            select: {
+              id: true,
+              nama: true,
+              email: true,
+              role: true,
+              cabangId: true,
+              isActive: true,
+              lastLogin: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          detailTransaksi: true,
+        },
+      });
     });
 
     const transformedResult: TransaksiWithDetails = {
@@ -183,19 +192,19 @@ export async function POST(request: NextRequest) {
 
 // GET /api/transactions/hold?cabangId=xxx - List held transactions
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuth();
+  if (!authResult.ok) return authResult.response;
+  const user = authResult.user;
+
   try {
-    const { searchParams } = new URL(request.url);
-    const cabangId = searchParams.get('cabangId');
+    const cabangId = user.cabangId;
 
     if (!cabangId) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Cabang harus dipilih',
-        },
+      const response: ApiResponse<never[]> = {
+        success: true,
+        data: [],
       };
-      return NextResponse.json(response, { status: 400 });
+      return NextResponse.json(response);
     }
 
     const transactions = await prisma.transaksi.findMany({

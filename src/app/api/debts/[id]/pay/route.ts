@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
+import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -9,11 +10,15 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const authResult = await requireAuth();
+  if (!authResult.ok) return authResult.response;
+  const sessionUser = authResult.user;
+
   try {
     const body = await request.json();
-    const { jumlah, metode, catatan, userId } = body;
+    const { jumlah, metode, catatan } = body;
 
-    if (!jumlah || jumlah <= 0) {
+    if (!Number.isFinite(Number(jumlah)) || Number(jumlah) <= 0) {
       const response: ApiResponse<null> = {
         success: false,
         error: {
@@ -24,54 +29,46 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const hutang = await prisma.hutang.findUnique({
-      where: { id: params.id },
-    });
-
-    if (!hutang) {
+    const metodeValid = ['TUNAI', 'QRIS', 'TRANSFER'].includes(metode || 'TUNAI');
+    if (!metodeValid) {
       const response: ApiResponse<null> = {
         success: false,
         error: {
-          code: 'NOT_FOUND',
-          message: 'Data hutang tidak ditemukan',
-        },
-      };
-      return NextResponse.json(response, { status: 404 });
-    }
-
-    if (hutang.status === 'LUNAS') {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'ALREADY_PAID',
-          message: 'Hutang sudah lunas',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const sisaBaru = Number(hutang.sisa) - jumlah;
-
-    if (sisaBaru < 0) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: {
-          code: 'OVERPAYMENT',
-          message: `Pembayaran melebihi sisa hutang (Rp ${Number(hutang.sisa).toLocaleString('id-ID')})`,
+          code: 'VALIDATION_ERROR',
+          message: 'Metode pembayaran tidak valid',
         },
       };
       return NextResponse.json(response, { status: 400 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Create payment record
+      // Baca hutang DI DALAM transaction untuk cegah race (dua pembayaran bersamaan)
+      const hutang = await tx.hutang.findUnique({
+        where: { id: params.id },
+      });
+
+      if (!hutang) {
+        throw new Error('HUTANG_TIDAK_DITEMUKAN');
+      }
+
+      if (hutang.status === 'LUNAS') {
+        throw new Error('SUDAH_LUNAS');
+      }
+
+      const sisaBaru = Number(hutang.sisa) - Number(jumlah);
+
+      if (sisaBaru < 0) {
+        throw new Error(`OVERPAYMENT:${Number(hutang.sisa)}`);
+      }
+
+      // Create payment record (userId dari session)
       const pembayaran = await tx.hutangPembayaran.create({
         data: {
           hutangId: params.id,
-          jumlah,
+          jumlah: Number(jumlah),
           metode: metode || 'TUNAI',
           catatan: catatan || null,
-          userId: userId || 'demo-kasir-001',
+          userId: sessionUser.id,
         },
       });
 
@@ -90,6 +87,38 @@ export async function POST(
         },
       });
 
+      // Pembayaran tunai dicatat sebagai kas masuk (aturan bisnis DEB-002)
+      if ((metode || 'TUNAI') === 'TUNAI' && sessionUser.cabangId) {
+        const kas = await tx.kas.findUnique({
+          where: { cabangId: sessionUser.cabangId },
+        });
+
+        if (kas) {
+          const saldoSebelum = Number(kas.saldo);
+          const saldoSesudah = saldoSebelum + Number(jumlah);
+
+          await tx.kas.update({
+            where: { cabangId: sessionUser.cabangId },
+            data: { saldo: saldoSesudah },
+          });
+
+          await tx.kasMutasi.create({
+            data: {
+              cabangId: sessionUser.cabangId,
+              jenis: 'MASUK',
+              kategori: 'PEMBAYARAN_HUTANG',
+              nominal: Number(jumlah),
+              saldoSebelum,
+              saldoSesudah,
+              keterangan: `Pembayaran hutang ${updatedHutang.pelanggan?.nama || ''}`.trim(),
+              referensiTipe: 'HUTANG',
+              referensiId: hutang.id,
+              userId: sessionUser.id,
+            },
+          });
+        }
+      }
+
       return { pembayaran, hutang: updatedHutang };
     });
 
@@ -101,8 +130,36 @@ export async function POST(
 
     return NextResponse.json(response);
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'HUTANG_TIDAK_DITEMUKAN') {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Data hutang tidak ditemukan' },
+        };
+        return NextResponse.json(response, { status: 404 });
+      }
+      if (error.message === 'SUDAH_LUNAS') {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: { code: 'ALREADY_PAID', message: 'Hutang sudah lunas' },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+      if (error.message.startsWith('OVERPAYMENT:')) {
+        const sisa = error.message.split(':')[1];
+        const response: ApiResponse<null> = {
+          success: false,
+          error: {
+            code: 'OVERPAYMENT',
+            message: `Pembayaran melebihi sisa hutang (Rp ${Number(sisa).toLocaleString('id-ID')})`,
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
     console.error('Error processing payment:', error);
-    
+
     const response: ApiResponse<null> = {
       success: false,
       error: {

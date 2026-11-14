@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/settings - Get store settings
 export async function GET() {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     // Get or create default settings
     let settings = await prisma.pengaturanToko.findFirst();
@@ -73,6 +76,8 @@ export async function GET() {
 
 // PUT /api/settings - Update store settings
 export async function PUT(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 

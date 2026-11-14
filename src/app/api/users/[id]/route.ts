@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +11,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const user = await prisma.user.findUnique({
       where: { id: params.id },
@@ -69,6 +73,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 
@@ -134,7 +140,10 @@ export async function PUT(
     if (nama !== undefined) updateData.nama = nama;
     if (email !== undefined) updateData.email = email;
     if (role !== undefined) updateData.role = role;
-    if (pin !== undefined) updateData.pin = pin || null;
+    if (pin !== undefined) {
+      // Hash PIN sebelum disimpan
+      updateData.pin = pin ? await bcrypt.hash(pin, 10) : null;
+    }
     if (cabangId !== undefined) updateData.cabangId = cabangId || null;
     if (isActive !== undefined) updateData.isActive = isActive;
 
@@ -191,6 +200,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     // Check if user exists
     const existingUser = await prisma.user.findUnique({

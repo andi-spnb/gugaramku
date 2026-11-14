@@ -49,7 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
 
         if (!user) {
-          throw new Error('Email tidak terdaftar');
+          throw new Error('Email atau password/PIN salah');
         }
 
         if (!user.isActive) {
@@ -58,25 +58,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // Validate based on login mode
         if (loginMode === 'pin') {
-          // PIN login
+          // PIN login (PIN di-hash dengan bcrypt)
           if (!pin) {
             throw new Error('PIN wajib diisi');
           }
           if (!user.pin) {
-            throw new Error('PIN belum diatur untuk akun ini');
+            throw new Error('Email atau password/PIN salah');
           }
-          if (user.pin !== pin) {
-            throw new Error('PIN salah');
+          const pinValid = await bcrypt.compare(pin, user.pin);
+          if (!pinValid) {
+            throw new Error('Email atau password/PIN salah');
           }
         } else {
           // Password login
           if (!password) {
-            throw new Error('Password wajib diisi');
+            throw new Error('Email atau password/PIN salah');
           }
-          
+
           const isValidPassword = await bcrypt.compare(password, user.password);
           if (!isValidPassword) {
-            throw new Error('Password salah');
+            throw new Error('Email atau password/PIN salah');
           }
         }
 

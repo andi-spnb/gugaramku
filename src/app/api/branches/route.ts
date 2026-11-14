@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/branches - Get branches list
 export async function GET(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
@@ -96,6 +99,8 @@ export async function GET(request: NextRequest) {
 
 // POST /api/branches - Create new branch
 export async function POST(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 

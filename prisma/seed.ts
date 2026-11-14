@@ -6,10 +6,13 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Hash passwords
+  // Hash passwords & PINs
   const ownerPassword = await bcrypt.hash('owner123', 10);
   const adminPassword = await bcrypt.hash('admin123', 10);
   const kasirPassword = await bcrypt.hash('kasir123', 10);
+  const ownerPin = await bcrypt.hash('1111', 10);
+  const adminPin = await bcrypt.hash('2222', 10);
+  const kasirPin = await bcrypt.hash('1234', 10);
 
   // 1. Create Cabang (Branch)
   const cabang = await prisma.cabang.upsert({
@@ -30,14 +33,14 @@ async function main() {
   // Owner
   const owner = await prisma.user.upsert({
     where: { email: 'owner@gugaramku.com' },
-    update: { password: ownerPassword },
+    update: { password: ownerPassword, pin: ownerPin },
     create: {
       id: 'demo-owner-001',
       cabangId: cabang.id,
       nama: 'Owner Demo',
       email: 'owner@gugaramku.com',
       password: ownerPassword,
-      pin: '1111',
+      pin: ownerPin,
       role: 'OWNER',
       isActive: true,
     },
@@ -47,14 +50,14 @@ async function main() {
   // Admin Cabang
   const admin = await prisma.user.upsert({
     where: { email: 'admin@gugaramku.com' },
-    update: { password: adminPassword },
+    update: { password: adminPassword, pin: adminPin },
     create: {
       id: 'demo-admin-001',
       cabangId: cabang.id,
       nama: 'Admin Cabang Demo',
       email: 'admin@gugaramku.com',
       password: adminPassword,
-      pin: '2222',
+      pin: adminPin,
       role: 'ADMIN_CABANG',
       isActive: true,
     },
@@ -64,14 +67,14 @@ async function main() {
   // Kasir
   const kasir = await prisma.user.upsert({
     where: { email: 'kasir@gugaramku.com' },
-    update: { password: kasirPassword },
+    update: { password: kasirPassword, pin: kasirPin },
     create: {
       id: 'demo-kasir-001',
       cabangId: cabang.id,
       nama: 'Kasir Demo',
       email: 'kasir@gugaramku.com',
       password: kasirPassword,
-      pin: '1234',
+      pin: kasirPin,
       role: 'KASIR',
       isActive: true,
     },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, ProdukWithDetails } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const product = await prisma.produk.findUnique({
       where: { id: params.id },
@@ -102,6 +105,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 
@@ -115,6 +120,47 @@ export async function PUT(
         },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // Validate numeric values
+    const hargaModal = Number(body.hargaModal || 0);
+    if (!Number.isFinite(hargaModal) || hargaModal < 0) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Harga modal tidak boleh negatif',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    for (const s of body.satuan) {
+      const konversi = Number(s.konversi);
+      if (!Number.isFinite(konversi) || konversi < 1) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Konversi minimal 1',
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+
+      for (const key of ['harga1', 'harga2', 'harga3', 'harga4'] as const) {
+        const val = s[key];
+        if (val !== undefined && val !== null && (!Number.isFinite(Number(val)) || Number(val) < 0)) {
+          const response: ApiResponse<null> = {
+            success: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: `${key} tidak boleh negatif`,
+            },
+          };
+          return NextResponse.json(response, { status: 400 });
+        }
+      }
     }
 
     // Check if product exists
@@ -278,6 +324,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     // Check if product exists
     const existing = await prisma.produk.findUnique({

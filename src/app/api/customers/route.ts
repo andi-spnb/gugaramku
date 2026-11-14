@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/customers - List customers
 export async function GET(request: NextRequest) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const { searchParams } = new URL(request.url);
     
@@ -70,6 +73,8 @@ export async function GET(request: NextRequest) {
 
 // POST /api/customers - Create customer
 export async function POST(request: NextRequest) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 
@@ -79,6 +84,18 @@ export async function POST(request: NextRequest) {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Nama pelanggan harus diisi',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const maxHutang = Number(body.maxHutang || 0);
+    if (!Number.isFinite(maxHutang) || maxHutang < 0) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Max hutang tidak boleh negatif',
         },
       };
       return NextResponse.json(response, { status: 400 });

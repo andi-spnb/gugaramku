@@ -168,10 +168,12 @@ export function ReceiptDialog({ open, onClose, data, settings }: ReceiptDialogPr
               <span>{METODE_LABEL[data.metodeBayar] || data.metodeBayar}</span>
               <span className="tabular-nums">{formatRupiah(data.jumlahBayar)}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Kembalian</span>
-              <span className="tabular-nums">{formatRupiah(data.kembalian)}</span>
-            </div>
+            {data.metodeBayar === 'TUNAI' && (
+              <div className="flex justify-between">
+                <span>Kembalian</span>
+                <span className="tabular-nums">{formatRupiah(data.kembalian)}</span>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

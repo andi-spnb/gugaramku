@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/users - Get users list
 export async function GET(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
@@ -108,6 +111,8 @@ export async function GET(request: NextRequest) {
 
 // POST /api/users - Create new user
 export async function POST(request: NextRequest) {
+    const authResult = await requireAuth(['OWNER']);
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 
@@ -171,8 +176,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Hash password sebelum disimpan
+    // Hash password dan PIN sebelum disimpan
     const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPin = pin ? await bcrypt.hash(pin, 10) : null;
 
     // Create user
     const user = await prisma.user.create({
@@ -180,7 +186,7 @@ export async function POST(request: NextRequest) {
         nama,
         email,
         password: hashedPassword,
-        pin: pin || null,
+        pin: hashedPin,
         role,
         cabangId: cabangId || null,
         isActive: true,

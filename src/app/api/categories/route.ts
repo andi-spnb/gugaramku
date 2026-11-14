@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse, Kategori } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/categories - List all categories
 export async function GET() {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const categories = await prisma.kategori.findMany({
       where: { isActive: true },
@@ -45,6 +48,8 @@ export async function GET() {
 
 // POST /api/categories - Create new category
 export async function POST(request: NextRequest) {
+    const authResult = await requireAuth();
+    if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
 
