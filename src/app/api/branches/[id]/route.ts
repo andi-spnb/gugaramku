@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,6 +146,15 @@ export async function PUT(
       },
     });
 
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'BRANCH_UPDATE',
+      tabel: 'cabang',
+      recordId: params.id,
+      dataBaru: { kode, nama, alamat, telepon, isActive },
+      request,
+    });
+
     const data = {
       id: branch.id,
       kode: branch.kode,
@@ -216,6 +226,14 @@ export async function DELETE(
         data: { isActive: false },
       });
 
+      await logActivity({
+        userId: authResult.user.id,
+        aksi: 'BRANCH_DELETE',
+        tabel: 'cabang',
+        recordId: params.id,
+        request,
+      });
+
       return NextResponse.json({
         success: true,
         data: null,
@@ -226,6 +244,14 @@ export async function DELETE(
     // Hard delete if no transactions
     await prisma.cabang.delete({
       where: { id: params.id },
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'BRANCH_DELETE',
+      tabel: 'cabang',
+      recordId: params.id,
+      request,
     });
 
     const response: ApiResponse<null> = {

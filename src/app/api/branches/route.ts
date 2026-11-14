@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +160,15 @@ export async function POST(request: NextRequest) {
       });
 
       return newBranch;
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'BRANCH_CREATE',
+      tabel: 'cabang',
+      recordId: branch.id,
+      dataBaru: { kode, nama, alamat, telepon },
+      request,
     });
 
     const data = {

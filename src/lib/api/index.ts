@@ -1,4 +1,4 @@
-import type { ApiResponse, ProdukWithDetails, TransaksiWithDetails, PaginationMeta, Kategori } from '@/types';
+import type { ApiResponse, ProdukWithDetails, TransaksiWithDetails, PaginationMeta, Kategori, LogAktivitas } from '@/types';
 
 const API_BASE = '/api';
 
@@ -1153,4 +1153,21 @@ export async function deleteBranch(id: string): Promise<ApiResponse<null>> {
   return fetchApi<null>(`/branches/${id}`, {
     method: 'DELETE',
   });
+}
+
+// ===========================================
+// LOG AKTIVITAS (AUDIT TRAIL)
+// ===========================================
+
+export async function getActivityLogs(
+  params: import('@/types').GetActivityLogsParams = {}
+): Promise<ApiResponse<LogAktivitas[]>> {
+  const searchParams = new URLSearchParams();
+  if (params.page) searchParams.set('page', params.page.toString());
+  if (params.limit) searchParams.set('limit', params.limit.toString());
+  if (params.aksi) searchParams.set('aksi', params.aksi);
+  if (params.userId) searchParams.set('userId', params.userId);
+  if (params.startDate) searchParams.set('startDate', params.startDate);
+  if (params.endDate) searchParams.set('endDate', params.endDate);
+  return fetchApi<LogAktivitas[]>(`/activity-logs?${searchParams.toString()}`);
 }

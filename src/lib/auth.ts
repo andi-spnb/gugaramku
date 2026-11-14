@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db/prisma';
+import { logActivity } from '@/lib/audit-log';
 
 // ===========================================
 // Rate limiting login (in-memory, per email)
@@ -127,6 +128,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         await prisma.user.update({
           where: { id: user.id },
           data: { lastLogin: new Date() },
+        });
+
+        await logActivity({
+          userId: user.id,
+          aksi: 'LOGIN',
+          tabel: 'user',
+          recordId: user.id,
         });
 
         return {

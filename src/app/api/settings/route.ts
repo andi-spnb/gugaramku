@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,6 +142,15 @@ export async function PUT(request: NextRequest) {
         },
       });
     }
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'SETTINGS_UPDATE',
+      tabel: 'pengaturan_toko',
+      recordId: settings.id,
+      dataBaru: body,
+      request,
+    });
 
     // Parse rekening bank for response
     let parsedRekeningBank = [];

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
 // DELETE /api/transactions/hold/[id] - Hapus (batalkan) transaksi tertahan
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const authResult = await requireAuth();
@@ -46,6 +47,14 @@ export async function DELETE(
     // Detail transaksi otomatis terhapus (cascade)
     await prisma.transaksi.delete({
       where: { id },
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'HOLD_DELETE',
+      tabel: 'transaksi',
+      recordId: params.id,
+      request,
     });
 
     const response: ApiResponse<null> = {

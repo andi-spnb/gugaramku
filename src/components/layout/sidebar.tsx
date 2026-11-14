@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Building2,
   ClipboardList,
+  History,
   ChevronDown,
   ChevronRight,
   X,
@@ -87,6 +88,12 @@ const navigation: NavItem[] = [
     title: 'Cabang',
     href: '/cabang',
     icon: Building2,
+    roles: ['OWNER'],
+  },
+  {
+    title: 'Log Aktivitas',
+    href: '/aktivitas',
+    icon: History,
     roles: ['OWNER'],
   },
   {

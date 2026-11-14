@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -212,6 +213,20 @@ export async function POST(request: NextRequest) {
       cabang: user.cabang,
       createdAt: user.createdAt.toISOString(),
     };
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'USER_CREATE',
+      tabel: 'user',
+      recordId: user.id,
+      dataBaru: {
+        nama,
+        email,
+        role,
+        cabangId: cabangId || null,
+      },
+      request,
+    });
 
     const response: ApiResponse<typeof data> = {
       success: true,

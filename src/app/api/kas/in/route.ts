@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,6 +105,15 @@ export async function POST(request: NextRequest) {
           data: { saldo: saldoSesudah },
         }),
       ];
+    });
+
+    await logActivity({
+      userId: user.id,
+      aksi: 'KAS_MASUK',
+      tabel: 'kas',
+      recordId: mutasi.id,
+      dataBaru: { nominal, kategori, keterangan },
+      request,
     });
 
     const responseData = {

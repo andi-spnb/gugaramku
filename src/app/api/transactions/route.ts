@@ -3,6 +3,7 @@ import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse, TransaksiWithDetails } from '@/types';
 import { MetodeBayar, StatusTransaksi, StatusSync, Role, KategoriPelanggan } from '@/types';
+import { logActivity } from '@/lib/audit-log';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
@@ -264,15 +265,25 @@ export async function POST(request: NextRequest) {
       }
 
       // Generate nomor di dalam transaction
+      // PENTING: dateStr & rentang hari HARUS memakai basis waktu yang sama (lokal),
+      // jika tidak nomor bisa bertabrakan (mis. dini hari WIB = tanggal UTC kemarin).
       const today = new Date();
-      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}${mm}${dd}`;
+      const startOfDay = new Date(yyyy, today.getMonth(), today.getDate());
       const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-      const count = await tx.transaksi.count({
-        where: { cabangId, tanggal: { gte: startOfDay, lt: endOfDay } },
+      // Ambil nomor terakhir hari ini (bukan count) agar tidak tabrakan
+      // bila ada transaksi yang dihapus / nomor tidak berurutan.
+      const lastToday = await tx.transaksi.findFirst({
+        where: { cabangId, nomor: { startsWith: `TRX-${dateStr}-` } },
+        orderBy: { nomor: 'desc' },
+        select: { nomor: true },
       });
-      const nomor = `TRX-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+      const lastSeq = lastToday ? parseInt(lastToday.nomor.split('-').pop() || '0', 10) : 0;
+      const nomor = `TRX-${dateStr}-${String((Number.isNaN(lastSeq) ? 0 : lastSeq) + 1).padStart(4, '0')}`;
 
       // Create main transaction
       const transaksi = await tx.transaksi.create({
@@ -387,6 +398,15 @@ export async function POST(request: NextRequest) {
       }
 
       return transaksi;
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'TRANSAKSI_CREATE',
+      tabel: 'transaksi',
+      recordId: result.id,
+      dataBaru: { nomor: result.nomor, metodeBayar: result.metodeBayar, total: Number(result.total) },
+      request,
     });
 
     // Transform response

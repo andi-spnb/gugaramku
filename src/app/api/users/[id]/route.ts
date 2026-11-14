@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,6 +162,15 @@ export async function PUT(
       },
     });
 
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'USER_UPDATE',
+      tabel: 'user',
+      recordId: params.id,
+      dataBaru: { nama, email, role, cabangId, isActive },
+      request,
+    });
+
     const data = {
       id: user.id,
       nama: user.nama,
@@ -227,6 +237,14 @@ export async function DELETE(
     await prisma.user.update({
       where: { id: params.id },
       data: { isActive: false },
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'USER_DELETE',
+      tabel: 'user',
+      recordId: params.id,
+      request,
     });
 
     const response: ApiResponse<null> = {

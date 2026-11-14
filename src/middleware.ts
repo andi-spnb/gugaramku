@@ -26,6 +26,9 @@ const roleRoutes: Record<string, string[]> = {
   ],
 };
 
+// Routes khusus (misal OWNER-only, di luar roleRoutes umum)
+const ownerOnlyRoutes = ['/aktivitas'];
+
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
@@ -49,6 +52,14 @@ export default auth((req) => {
 
   // Cek akses berdasarkan role
   if (isLoggedIn && userRole && !isPublicRoute) {
+    // Route OWNER-only
+    if (ownerOnlyRoutes.some((r) => nextUrl.pathname === r || nextUrl.pathname.startsWith(`${r}/`))) {
+      if (userRole !== 'OWNER') {
+        return NextResponse.redirect(new URL('/kasir', nextUrl.origin));
+      }
+      return NextResponse.next();
+    }
+
     // Role tidak dikenal: perlakukan seperti KASIR untuk cegah redirect loop
     const allowedRoutes = roleRoutes[userRole] || roleRoutes.KASIR;
     

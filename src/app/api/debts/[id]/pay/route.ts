@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import type { ApiResponse } from '@/types';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,6 +121,15 @@ export async function POST(
       }
 
       return { pembayaran, hutang: updatedHutang };
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'DEBT_PAY',
+      tabel: 'hutang',
+      recordId: params.id,
+      dataBaru: { hutangId: params.id, jumlah, metode },
+      request,
     });
 
     const response: ApiResponse<typeof result> = {

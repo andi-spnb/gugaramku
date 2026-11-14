@@ -3,6 +3,7 @@ import prisma from '@/lib/db/prisma';
 import type { ApiResponse, TransaksiWithDetails } from '@/types';
 import { MetodeBayar, StatusSync } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,6 +134,15 @@ export async function POST(request: NextRequest) {
           detailTransaksi: true,
         },
       });
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'TRANSAKSI_HOLD',
+      tabel: 'transaksi',
+      recordId: result.id,
+      dataBaru: { nomor: result.nomor },
+      request,
     });
 
     const transformedResult: TransaksiWithDetails = {

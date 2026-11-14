@@ -49,6 +49,7 @@ import {
   createBranch,
   updateBranch,
   deleteBranch,
+  getActivityLogs,
   type SearchProductsParams,
   type CreateProductParams,
   type CreateTransactionParams,
@@ -888,6 +889,26 @@ export function useDeleteBranch() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
+    },
+  });
+}
+
+// ===========================================
+// LOG AKTIVITAS (AUDIT TRAIL)
+// ===========================================
+
+export function useActivityLogs(params: import('@/types').GetActivityLogsParams = {}) {
+  return useQuery({
+    queryKey: ['activity-logs', params],
+    queryFn: async () => {
+      const response = await getActivityLogs(params);
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal mengambil log aktivitas');
+      }
+      return {
+        logs: response.data || [],
+        meta: response.meta,
+      };
     },
   });
 }

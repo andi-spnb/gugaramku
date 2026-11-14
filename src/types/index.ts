@@ -29,6 +29,37 @@ export interface Session {
 }
 
 // ===========================================
+// LOG AKTIVITAS (AUDIT TRAIL) TYPES
+// ===========================================
+
+export interface LogAktivitas {
+  id: string;
+  userId: string;
+  aksi: string;
+  tabel: string;
+  recordId: string | null;
+  dataLama: string | null;
+  dataBaru: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: Date;
+  user?: {
+    id: string;
+    nama: string;
+    email: string;
+  } | null;
+}
+
+export interface GetActivityLogsParams {
+  page?: number;
+  limit?: number;
+  aksi?: string;
+  userId?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+// ===========================================
 // CABANG (BRANCH) TYPES
 // ===========================================
 

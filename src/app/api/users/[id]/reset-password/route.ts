@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
+import { logActivity } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,15 @@ export async function POST(
     await prisma.user.update({
       where: { id: params.id },
       data: { password: hashedPassword },
+    });
+
+    await logActivity({
+      userId: authResult.user.id,
+      aksi: 'PASSWORD_RESET',
+      tabel: 'user',
+      recordId: params.id,
+      dataBaru: { userId: params.id },
+      request,
     });
 
     const response: ApiResponse<{ message: string }> = {
