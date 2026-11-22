@@ -7,11 +7,19 @@ export const dynamic = 'force-dynamic';
 
 // GET /api/reports/dashboard - Get dashboard summary
 export async function GET(request: NextRequest) {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     const { searchParams } = new URL(request.url);
-    const cabangId = searchParams.get('cabangId') || 'demo-cabang-001';
+    // cabangId dari session (cegah IDOR lintas cabang)
+    const cabangId = authResult.user.cabangId;
+    if (!cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: { code: 'NO_CABANG', message: 'Akun Anda tidak terhubung ke cabang mana pun.' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
 
     // Get today's date range
     const today = new Date();

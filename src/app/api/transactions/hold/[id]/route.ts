@@ -44,6 +44,18 @@ export async function DELETE(
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Cegah hapus transaksi HOLD milik cabang lain
+    if (authResult.user.cabangId && transaksi.cabangId !== authResult.user.cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Akses ditolak untuk role Anda.',
+        },
+      };
+      return NextResponse.json(response, { status: 403 });
+    }
+
     // Detail transaksi otomatis terhapus (cascade)
     await prisma.transaksi.delete({
       where: { id },

@@ -285,6 +285,23 @@ export async function POST(request: NextRequest) {
 
     // Create retur and update stock in transaction
     const retur = await prisma.$transaction(async (tx) => {
+      // Re-check retur kumulatif DI DALAM transaction (cegah race double refund:
+      // dua request retur bersamaan untuk item yang sama)
+      const existingDetails = await tx.returDetail.findMany({
+        where: { detailTransaksiId: { in: items.map((i: { detailTransaksiId: string }) => i.detailTransaksiId) } },
+      });
+      const sudahMap = new Map<string, number>();
+      for (const rd of existingDetails) {
+        sudahMap.set(rd.detailTransaksiId, (sudahMap.get(rd.detailTransaksiId) || 0) + Number(rd.jumlah));
+      }
+      for (const d of returDetails) {
+        const sudah = sudahMap.get(d.detailTransaksiId) || 0;
+        const detail = transaksi.detailTransaksi.find((x) => x.id === d.detailTransaksiId);
+        if (detail && sudah + d.jumlah > Number(detail.jumlah)) {
+          throw new Error(`RETUR_LEBIH:${detail.namaBarang}:${sudah}`);
+        }
+      }
+
       // Create retur
       const newRetur = await tx.retur.create({
         data: {
@@ -394,6 +411,11 @@ export async function POST(request: NextRequest) {
         const saldoSebelum = kas.saldo;
         const saldoSesudah = saldoSebelum - totalRefund;
 
+        // Tolak refund tunai yang membuat saldo kas negatif
+        if (saldoSesudah < 0) {
+          throw new Error(`SALDO_KURANG:${saldoSebelum}`);
+        }
+
         // Create kas mutation
         await tx.kasMutasi.create({
           data: {
@@ -456,6 +478,31 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.startsWith('RETUR_LEBIH:')) {
+        const [, namaBarang, sudah] = error.message.split(':');
+        const response: ApiResponse<null> = {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Total retur untuk ${namaBarang} melebihi jumlah beli (sudah diretur: ${sudah})`,
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+      if (error.message.startsWith('SALDO_KURANG:')) {
+        const saldo = error.message.split(':')[1];
+        const response: ApiResponse<null> = {
+          success: false,
+          error: {
+            code: 'INSUFFICIENT_BALANCE',
+            message: `Saldo kas tidak cukup untuk refund tunai (saldo saat ini: Rp ${Number(saldo).toLocaleString('id-ID')})`,
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
     console.error('Error creating retur:', error);
 
     const response: ApiResponse<null> = {

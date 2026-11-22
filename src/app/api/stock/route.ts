@@ -14,7 +14,15 @@ export async function GET(request: NextRequest) {
     
     const search = searchParams.get('search') || '';
     const kategoriId = searchParams.get('kategoriId');
-    const cabangId = searchParams.get('cabangId') || 'demo-cabang-001';
+    // cabangId dari session (cegah IDOR lintas cabang)
+    const cabangId = authResult.user.cabangId;
+    if (!cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: { code: 'NO_CABANG', message: 'Akun Anda tidak terhubung ke cabang mana pun.' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
     const status = searchParams.get('status'); // 'low', 'empty', 'normal'
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');

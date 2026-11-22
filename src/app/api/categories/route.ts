@@ -50,7 +50,7 @@ export async function GET() {
 
 // POST /api/categories - Create new category
 export async function POST(request: NextRequest) {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();

@@ -19,6 +19,16 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {};
 
+    // Scope ke cabang user (cegah IDOR lintas cabang)
+    if (!authResult.user.cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: { code: 'NO_CABANG', message: 'Akun Anda tidak terhubung ke cabang mana pun.' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+    where.transaksi = { cabangId: authResult.user.cabangId };
+
     if (pelangganId) {
       where.pelangganId = pelangganId;
     }

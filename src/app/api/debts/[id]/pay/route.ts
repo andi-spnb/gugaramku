@@ -28,10 +28,19 @@ export async function POST(
       // Baca hutang DI DALAM transaction untuk cegah race (dua pembayaran bersamaan)
       const hutang = await tx.hutang.findUnique({
         where: { id: params.id },
+        include: { transaksi: { select: { cabangId: true } } },
       });
 
       if (!hutang) {
         throw new Error('HUTANG_TIDAK_DITEMUKAN');
+      }
+
+      // Cegah bayar hutang milik cabang lain
+      if (
+        sessionUser.cabangId &&
+        hutang.transaksi.cabangId !== sessionUser.cabangId
+      ) {
+        throw new Error('FORBIDDEN');
       }
 
       if (hutang.status === 'LUNAS') {
@@ -130,8 +139,14 @@ export async function POST(
         };
         return NextResponse.json(response, { status: 404 });
       }
-      if (error.message === 'SUDAH_LUNAS') {
+      if (error.message === 'FORBIDDEN') {
         const response: ApiResponse<null> = {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Hutang ini bukan milik cabang Anda.' },
+        };
+        return NextResponse.json(response, { status: 403 });
+      }
+      if (error.message === 'SUDAH_LUNAS') {        const response: ApiResponse<null> = {
           success: false,
           error: { code: 'ALREADY_PAID', message: 'Hutang sudah lunas' },
         };

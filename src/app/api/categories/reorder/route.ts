@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 // PUT /api/categories/reorder - Reorder categories
 export async function PUT(request: NextRequest) {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();

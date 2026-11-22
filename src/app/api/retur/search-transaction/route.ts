@@ -1,15 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import type { ApiResponse } from '@/types';
+import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/retur/search-transaction - Search transaction for retur
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuth();
+  if (!authResult.ok) return authResult.response;
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
-    const cabangId = searchParams.get('cabangId') || 'demo-cabang-001';
+    // cabangId selalu dari session, bukan query param (cegah IDOR lintas cabang)
+    const cabangId = authResult.user.cabangId;
+
+    if (!cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'NO_CABANG',
+          message: 'Akun Anda tidak terhubung ke cabang mana pun.',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
 
     if (!search) {
       return NextResponse.json({

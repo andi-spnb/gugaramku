@@ -99,10 +99,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error('Email atau password/PIN salah');
         }
 
-        if (!user.isActive) {
-          throw new Error('Akun tidak aktif. Hubungi administrator.');
-        }
-
         const failLogin = (): never => {
           recordFailedAttempt(email);
           throw new Error('Email atau password/PIN salah');
@@ -119,6 +115,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!password || !(await bcrypt.compare(password, user.password))) {
             failLogin();
           }
+        }
+
+        // Cek status aktif SETELAH kredensial valid
+        // (pesan disamakan dengan gagal login supaya email tidak bisa dienumerasi)
+        if (!user.isActive) {
+          failLogin();
         }
 
         // Login sukses: reset pencacat percobaan
@@ -150,13 +152,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id as string;
         token.role = user.role as string;
         token.cabangId = user.cabangId as string | null;
         token.cabangNama = user.cabangNama as string | null;
         token.cabangKode = user.cabangKode as string | null;
+      }
+      if (trigger === 'update' && token.id) {
+        const current = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { nama: true, email: true },
+        });
+        if (current) {
+          token.name = current.nama;
+          token.email = current.email;
+        }
       }
       return token;
     },

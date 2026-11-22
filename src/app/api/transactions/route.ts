@@ -493,7 +493,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const cabangId = searchParams.get('cabangId');
     const kasirId = searchParams.get('kasirId');
     const tanggalMulai = searchParams.get('tanggalMulai');
     const tanggalAkhir = searchParams.get('tanggalAkhir');
@@ -504,8 +503,15 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: Record<string, unknown> = {};
 
-    // Scope ke cabang user untuk keamanan
-    where.cabangId = authResult.user.cabangId ?? cabangId;
+    // Scope ke cabang user untuk keamanan (tanpa fallback ke param klien)
+    if (!authResult.user.cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: { code: 'NO_CABANG', message: 'Akun Anda tidak terhubung ke cabang mana pun.' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+    where.cabangId = authResult.user.cabangId;
     if (kasirId) where.kasirId = kasirId;
     if (status) where.status = status;
 

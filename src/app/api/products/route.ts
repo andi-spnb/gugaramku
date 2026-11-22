@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 // POST /api/products - Create new product
 export async function POST(request: NextRequest) {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
@@ -20,11 +20,22 @@ export async function POST(request: NextRequest) {
 
     const { nama, satuan, barcode, kategoriId, satuanDasar, hargaModal, stokAwal } = parsed.data;
     // Field di luar schema (schema strict) — dibaca dari body mentah
-    const { gambar, cabangId, stokMinimum } = body as {
+    const { gambar, stokMinimum } = body as {
       gambar?: string | null;
-      cabangId?: string;
       stokMinimum?: number;
     };
+    // cabangId selalu dari session (cegah pembuatan stok di cabang sembarang)
+    const cabangId = authResult.user.cabangId;
+    if (!cabangId) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'NO_CABANG',
+          message: 'Akun Anda tidak terhubung ke cabang mana pun.',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
 
     // Check barcode uniqueness
     if (barcode) {

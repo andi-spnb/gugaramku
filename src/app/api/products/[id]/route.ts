@@ -107,7 +107,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     const body = await request.json();
@@ -280,7 +280,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     // Check if product exists
