@@ -7,6 +7,9 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     globalSetup: ['tests/global-setup.ts'],
     setupFiles: ['tests/setup-api.ts'],
+    // Semua file test API memakai satu DB test yang sama (pembersihan di
+    // beforeEach) — file harus jalan berurutan agar tidak saling hapus data.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

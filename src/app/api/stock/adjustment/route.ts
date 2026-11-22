@@ -38,47 +38,74 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Get or create stock record (baca di dalam tx untuk konsistensi)
-      let stok = await tx.stok.findUnique({
+      const stok = await tx.stok.findUnique({
         where: {
           produkId_cabangId: { produkId, cabangId },
         },
       });
 
-      const jumlahSebelum = stok?.jumlah || 0;
+      let jumlahSebelum = Number(stok?.jumlah ?? 0);
       let jumlahSesudah: number;
+      // Baris stok terbaru (dibaca ulang setelah update atomik)
+      let stokAfter: { id: string; jumlah: number };
 
-      // Calculate new stock based on tipe
       if (tipe === 'OPNAME') {
-        // Opname sets absolute value
+        // Opname men-set nilai absolut. Optimistic lock: update hanya bila stok
+        // masih sama seperti yang dilihat — bila ada penjualan bersamaan, stok
+        // berubah dan opname wajib diulang dengan data terbaru (jangan menimpa).
         jumlahSesudah = Number(jumlah);
-      } else if (tipe === 'ADJUSTMENT_PLUS') {
-        jumlahSesudah = Number(jumlahSebelum) + Number(jumlah);
+        if (stok) {
+          const updated = await tx.stok.updateMany({
+            where: { id: stok.id, jumlah: stok.jumlah },
+            data: { jumlah: jumlahSesudah },
+          });
+          if (updated.count === 0) {
+            throw new Error('STOK_BERUBAH');
+          }
+          const fresh = await tx.stok.findUniqueOrThrow({
+            where: { id: stok.id },
+            select: { id: true, jumlah: true },
+          });
+          stokAfter = { id: fresh.id, jumlah: Number(fresh.jumlah) };
+        } else {
+          const created = await tx.stok.create({
+            data: { produkId, cabangId, jumlah: jumlahSesudah, stokMinimum: 0 },
+          });
+          stokAfter = { id: created.id, jumlah: Number(created.jumlah) };
+        }
       } else {
-        // ADJUSTMENT_MINUS, RUSAK, EXPIRED
-        jumlahSesudah = Number(jumlahSebelum) - Number(jumlah);
-      }
+        // ADJUSTMENT_PLUS / ADJUSTMENT_MINUS / RUSAK / EXPIRED: perubahan relatif,
+        // atomik lewat increment/decrement (tidak menimpa penjualan bersamaan).
+        const delta = tipe === 'ADJUSTMENT_PLUS' ? Number(jumlah) : -Number(jumlah);
 
-      // Stok tidak boleh negatif
-      if (jumlahSesudah < 0) {
-        throw new Error('STOK_NEGATIF');
-      }
-
-      // Update or create stock
-      if (stok) {
-        stok = await tx.stok.update({
-          where: { id: stok.id },
-          data: { jumlah: jumlahSesudah },
-        });
-      } else {
-        stok = await tx.stok.create({
-          data: {
-            produkId,
-            cabangId,
-            jumlah: jumlahSesudah,
-            stokMinimum: 0,
-          },
-        });
+        if (!stok) {
+          if (delta < 0) throw new Error('STOK_NEGATIF');
+          const created = await tx.stok.create({
+            data: { produkId, cabangId, jumlah: delta, stokMinimum: 0 },
+          });
+          jumlahSebelum = 0;
+          jumlahSesudah = delta;
+          stokAfter = { id: created.id, jumlah: Number(created.jumlah) };
+        } else {
+          // Minus tidak boleh membuat stok negatif: guard di where-clause
+          const updated = await tx.stok.updateMany({
+            where: {
+              id: stok.id,
+              ...(delta < 0 ? { jumlah: { gte: Number(jumlah) } } : {}),
+            },
+            data: { jumlah: { increment: delta } },
+          });
+          if (updated.count === 0) {
+            throw new Error(delta < 0 ? 'STOK_NEGATIF' : 'STOK_BERUBAH');
+          }
+          const fresh = await tx.stok.findUniqueOrThrow({
+            where: { id: stok.id },
+            select: { id: true, jumlah: true },
+          });
+          jumlahSesudah = Number(fresh.jumlah);
+          jumlahSebelum = jumlahSesudah - delta;
+          stokAfter = { id: fresh.id, jumlah: Number(fresh.jumlah) };
+        }
       }
 
       // Create mutation record (userId dari session, bukan body)
@@ -86,8 +113,8 @@ export async function POST(request: NextRequest) {
         data: {
           produkId,
           cabangId,
-          jumlah: tipe === 'OPNAME' ? jumlahSesudah - Number(jumlahSebelum) : (tipe === 'ADJUSTMENT_PLUS' ? Number(jumlah) : -Number(jumlah)),
-          jumlahSebelum: Number(jumlahSebelum),
+          jumlah: tipe === 'OPNAME' ? jumlahSesudah - jumlahSebelum : (tipe === 'ADJUSTMENT_PLUS' ? Number(jumlah) : -Number(jumlah)),
+          jumlahSebelum,
           jumlahSesudah,
           tipe,
           keterangan: keterangan || null,
@@ -95,7 +122,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return { stok, mutasi };
+      return { stok: stokAfter, mutasi };
     });
 
     await logActivity({
@@ -130,6 +157,18 @@ export async function POST(request: NextRequest) {
         },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    if (error instanceof Error && error.message === 'STOK_BERUBAH') {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: {
+          code: 'STOCK_CONFLICT',
+          message:
+            'Stok berubah saat penyimpanan (kemungkinan ada transaksi bersamaan). Muat ulang data lalu coba lagi.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     console.error('Error creating adjustment:', error);

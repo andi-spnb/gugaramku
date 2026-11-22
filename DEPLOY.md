@@ -9,7 +9,7 @@
 
 1. **K7**: Next.js 14.2.35 punya advisory critical yang belum dipatch. Minimal hapus wildcard `images.remotePatterns` di `next.config.js` sebelum expose ke internet.
 
-Sudah diperbaiki (batch 1 & 2, 2026-11-23): K1 (laba), K2 (quick sale), K3 (idempotency offline), K4 (PostgreSQL + migrations), K5 (guard seed + create-owner), T1, T2, T3, T8 (Decimal).
+Sudah diperbaiki (batch 1-3, 2026-11-23): K1 (laba), K2 (quick sale), K3 (idempotency offline), K4 (PostgreSQL + migrations), K5 (guard seed + create-owner), K6 (kas atomik), T1, T2, T3, T4 (guard cabang), T5 (adjustment race), T7 (nomor retry), T8 (Decimal).
 
 ---
 

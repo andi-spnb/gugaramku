@@ -58,8 +58,13 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const saldoSebelum = Number(kas.saldo);
-      const saldoSesudah = saldoSebelum + nominal;
+      // Increment atomik: dua mutasi bersamaan tidak saling menimpa saldo
+      const updated = await tx.kas.update({
+        where: { cabangId },
+        data: { saldo: { increment: nominal } },
+      });
+      const saldoSesudah = Number(updated.saldo);
+      const saldoSebelum = saldoSesudah - nominal;
 
       return [
         await tx.kasMutasi.create({
@@ -84,10 +89,7 @@ export async function POST(request: NextRequest) {
             },
           },
         }),
-        await tx.kas.update({
-          where: { cabangId },
-          data: { saldo: saldoSesudah },
-        }),
+        updated,
       ];
     });
 

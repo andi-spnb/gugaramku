@@ -35,9 +35,9 @@ export async function POST(
         throw new Error('HUTANG_TIDAK_DITEMUKAN');
       }
 
-      // Cegah bayar hutang milik cabang lain
+      // Cegah bayar hutang milik cabang lain (juga user tanpa cabang)
       if (
-        sessionUser.cabangId &&
+        !sessionUser.cabangId ||
         hutang.transaksi.cabangId !== sessionUser.cabangId
       ) {
         throw new Error('FORBIDDEN');
@@ -97,13 +97,13 @@ export async function POST(
         });
 
         if (kas) {
-          const saldoSebelum = Number(kas.saldo);
-          const saldoSesudah = saldoSebelum + Number(jumlah);
-
-          await tx.kas.update({
+          // Increment atomik: dua pembayaran bersamaan tidak saling menimpa saldo
+          const updatedKas = await tx.kas.update({
             where: { cabangId: sessionUser.cabangId },
-            data: { saldo: saldoSesudah },
+            data: { saldo: { increment: Number(jumlah) } },
           });
+          const saldoSesudah = Number(updatedKas.saldo);
+          const saldoSebelum = saldoSesudah - Number(jumlah);
 
           await tx.kasMutasi.create({
             data: {

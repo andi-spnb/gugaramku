@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
+import { withTransactionRetry } from '@/lib/db/retry';
 import type { ApiResponse, TransaksiWithDetails } from '@/types';
 import { MetodeBayar, StatusSync } from '@/types';
 import { requireAuth } from '@/lib/api-auth';
@@ -67,7 +68,8 @@ export async function POST(request: NextRequest) {
 
     // Create held transaction (status HOLD)
     // Stok TIDAK dikurangi, kas TIDAK diubah
-    const result = await prisma.$transaction(async (tx) => {
+    // (retry P2002: nomor HLD bisa bentrok bila dua kasir hold bersamaan)
+    const result = await withTransactionRetry(async (tx) => {
       // Generate hold number: HLD-YYYYMMDD-XXXX
       // PENTING: dateStr & rentang hari HARUS memakai basis waktu yang sama (lokal).
       const today = new Date();

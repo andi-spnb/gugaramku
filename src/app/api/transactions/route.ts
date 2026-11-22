@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/db/prisma';
+import { withTransactionRetry } from '@/lib/db/retry';
 import { requireAuth } from '@/lib/api-auth';
 import { parseBody } from '@/lib/validation/parse';
 import { createTransactionSchema } from '@/lib/validation/schemas';
@@ -199,8 +200,8 @@ export async function POST(request: NextRequest) {
       return validationError('Pembayaran HUTANG wajib memilih pelanggan');
     }
 
-    // Buat transaksi atomik
-    const result = await prisma.$transaction(async (tx) => {
+    // Buat transaksi atomik (dengan retry P2002 untuk nomor bentrok antar kasir)
+    const result = await withTransactionRetry(async (tx) => {
       // IDEMPOTENSI (retry offline): payload dengan clientRef yang sama hanya
       // diproses sekali. Retry setelah timeout/network error tidak membuat
       // transaksi ganda dan tidak memotong stok dua kali.
@@ -331,12 +332,14 @@ export async function POST(request: NextRequest) {
         });
 
         if (kas) {
-          const newSaldo = Number(kas.saldo) + total;
-
-          await tx.kas.update({
+          // Increment atomik: dua penjualan bersamaan tidak saling menimpa saldo
+          // (read-then-write lama bisa menghilangkan satu penjualan dari saldo)
+          const updatedKas = await tx.kas.update({
             where: { cabangId },
-            data: { saldo: newSaldo },
+            data: { saldo: { increment: total } },
           });
+          const saldoSesudah = Number(updatedKas.saldo);
+          const saldoSebelum = saldoSesudah - total;
 
           await tx.kasMutasi.create({
             data: {
@@ -344,8 +347,8 @@ export async function POST(request: NextRequest) {
               jenis: 'MASUK',
               kategori: 'PENJUALAN',
               nominal: total,
-              saldoSebelum: Number(kas.saldo),
-              saldoSesudah: newSaldo,
+              saldoSebelum,
+              saldoSesudah,
               keterangan: `Penjualan ${nomor}`,
               referensiTipe: 'TRANSAKSI',
               referensiId: transaksi.id,

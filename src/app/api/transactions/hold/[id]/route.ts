@@ -44,8 +44,8 @@ export async function DELETE(
       return NextResponse.json(response, { status: 400 });
     }
 
-    // Cegah hapus transaksi HOLD milik cabang lain
-    if (authResult.user.cabangId && transaksi.cabangId !== authResult.user.cabangId) {
+    // Cegah hapus transaksi HOLD milik cabang lain (juga user tanpa cabang)
+    if (!authResult.user.cabangId || transaksi.cabangId !== authResult.user.cabangId) {
       const response: ApiResponse<null> = {
         success: false,
         error: {

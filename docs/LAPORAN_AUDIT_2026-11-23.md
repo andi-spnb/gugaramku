@@ -24,12 +24,15 @@
 | K3 idempotency offline | ✅ fix | test: payload sama 2x = 1 transaksi, stok terpotong sekali |
 | K4 PostgreSQL + migrations | ✅ fix | provider postgresql, baseline `20261122232505_init`, migrate dev+deploy siap |
 | K5 guard seed + create-owner | ✅ fix | NODE_ENV=production → seed exit 1; `npm run create-owner` password acak |
-| K6 kas read-write race | ⬜ belum | batch 3 |
+| K6 kas read-write race | ✅ fix | test: 3 penjualan bersamaan → saldo Rp10.500 & rantai mutasi konsisten |
 | K7 Next.js advisory | ⬜ belum | batch terakhir |
 | T1 QRIS/TRANSFER lunas | ✅ fix | test: QRIS Rp0 ditolak |
 | T2 retur hutang | ✅ fix | test: refund dikredit ke hutang, kas utuh |
 | T3 race overpayment | ✅ fix | test: 2 bayar bersamaan → 1 sukses 1 ditolak |
-| T4–T7, T9–T11 | ⬜ belum | batch 3–4 |
+| T4 guard cabang null | ✅ fix | test: user tanpa cabang / cabang lain ditolak 403 (pay hutang & hapus HOLD) |
+| T5 race stock adjustment | ✅ fix | test: adjustment + penjualan bersamaan → stok 104 (tidak saling menimpa); opname pakai optimistic lock |
+| T7 race nomor transaksi | ✅ fix | test: 3 transaksi bersamaan → nomor unik semua tanpa 500 (retry P2002) |
+| T9–T11 | ⬜ belum | batch 4 |
 | T8 Float → Decimal | ✅ fix | uang Decimal(14,2), qty Decimal(14,3); 29 titik aritmetika dibenahi; JSON tetap number |
 
 ---
@@ -136,7 +139,7 @@
 
 1. ~~**K1, K2, K3, T1, T2, T3**~~ — ✅ SELESAI (batch 1): +15 test integrasi (91 total pass).
 2. ~~**K4 + T8 + K5**~~ — ✅ SELESAI (batch 2): PostgreSQL + baseline migrasi `20261122232505_init`, Decimal(14,2)/Decimal(14,3), guard seed, `npm run create-owner`. Test integrasi kini jalan di PostgreSQL.
-3. **K6, T4, T5, T7** — race conditions: pola `increment/decrement` + update kondisional.
+3. ~~**K6, T4, T5, T7**~~ — ✅ SELESAI (batch 3): kas & adjustment pakai `increment/decrement` atomik, opname pakai optimistic lock, nomor transaksi retry P2002, guard `cabangId` null. +11 test integrasi (102 total pass).
 4. **K7** — upgrade Next.js + `npm audit fix` (uji penuh setelahnya).
 5. **T6, S1, S2, S13** — performa laporan & kebersihan API.
 6. **T9, T10** — Redis rate limit + backup cron (bisa jadi bagian setup VPS).
