@@ -462,8 +462,16 @@ export interface CartItem {
   hargaJual: number;
   diskon: number;
   subtotal: number;
-  stokTersedia: number;
+  /**
+   * Stok tersedia dalam satuan dasar (bukan satuan item).
+   * undefined  = tidak diketahui, tanpa batas qty
+   * -1         = quick sale, tanpa cek stok
+   * >= 0       = batas stok = floor(stokTersedia / konversi)
+   */
+  stokTersedia?: number;
   availableUnits: CartItemUnit[]; // Daftar satuan yang tersedia untuk produk ini
+  /** Tingkat harga yang dipakai item ini (bisa beda antar item dalam satu transaksi) */
+  tingkatHarga?: number;
 }
 
 export interface Cart {

@@ -19,19 +19,19 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'GuGaramKu - POS & Inventory Management',
-    template: '%s | GuGaramKu',
+    default: 'TK.HAMZAH - POS & Inventory Management',
+    template: '%s | TK.HAMZAH',
   },
   description: 'Aplikasi POS dan Manajemen Inventory profesional untuk toko retail dan grosir',
   keywords: ['POS', 'inventory', 'kasir', 'toko', 'grosir', 'retail', 'manajemen stok'],
-  authors: [{ name: 'GuGaramKu Team' }],
-  creator: 'GuGaramKu',
+  authors: [{ name: 'TK.HAMZAH Team' }],
+  creator: 'TK.HAMZAH',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
   openGraph: {
     type: 'website',
     locale: 'id_ID',
-    siteName: 'GuGaramKu',
-    title: 'GuGaramKu - POS & Inventory Management',
+    siteName: 'TK.HAMZAH',
+    title: 'TK.HAMZAH - POS & Inventory Management',
     description: 'Aplikasi POS dan Manajemen Inventory profesional untuk toko retail dan grosir',
   },
   robots: {
@@ -57,9 +57,12 @@ export default function RootLayout({
           </QueryProvider>
         </SessionProvider>
         <Toaster 
-          position="bottom-right"
+          position="top-center"
+          offset={16}
+          gap={8}
+          visibleToasts={3}
           toastOptions={{
-            duration: 5000,
+            duration: 2500,
             classNames: {
               toast: 'bg-white border shadow-lg',
               title: 'text-gray-900 font-medium',

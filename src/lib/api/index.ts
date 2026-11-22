@@ -957,6 +957,17 @@ export async function getSettings(): Promise<ApiResponse<StoreSettings>> {
   return fetchApi<StoreSettings>('/settings');
 }
 
+export interface PriceLevel {
+  tingkat: number;
+  nama: string;
+  warna: string;
+  deskripsi: string | null;
+}
+
+export async function getPriceLevels(): Promise<ApiResponse<PriceLevel[]>> {
+  return fetchApi<PriceLevel[]>('/pengaturan-harga');
+}
+
 export interface UpdateSettingsParams {
   namaToko?: string;
   alamat?: string;
@@ -974,6 +985,41 @@ export async function updateSettings(
   params: UpdateSettingsParams
 ): Promise<ApiResponse<StoreSettings>> {
   return fetchApi<StoreSettings>('/settings', {
+    method: 'PUT',
+    body: JSON.stringify(params),
+  });
+}
+
+// ==========================================
+// PROFILE API (akun yang sedang login)
+// ==========================================
+
+export interface Profile {
+  id: string;
+  nama: string;
+  email: string;
+  role: 'OWNER' | 'ADMIN_CABANG' | 'KASIR';
+  lastLogin: string | null;
+  createdAt: string;
+  cabang: { id: string; kode: string; nama: string } | null;
+}
+
+export interface UpdateProfileParams {
+  nama: string;
+  email: string;
+  currentPassword: string;
+  newPassword?: string;
+  pin?: string | null;
+}
+
+export async function getProfile(): Promise<ApiResponse<Profile>> {
+  return fetchApi<Profile>('/profile');
+}
+
+export async function updateProfile(
+  params: UpdateProfileParams
+): Promise<ApiResponse<Profile>> {
+  return fetchApi<Profile>('/profile', {
     method: 'PUT',
     body: JSON.stringify(params),
   });

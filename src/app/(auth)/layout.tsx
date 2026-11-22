@@ -1,8 +1,9 @@
+import Image from 'next/image';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Login',
-  description: 'Masuk ke aplikasi GuGaramKu',
+  description: 'Masuk ke aplikasi TK.HAMZAH',
 };
 
 export default function AuthLayout({
@@ -15,9 +16,16 @@ export default function AuthLayout({
       <div className="w-full max-w-md space-y-8">
         {/* Logo */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary">GuGaramKu</h1>
+          <Image
+            src="/logo.png"
+            alt="TK.HAMZAH"
+            width={240}
+            height={80}
+            className="mx-auto"
+          />
+          <h1 className="mt-3 text-3xl font-bold text-primary">TK.HAMZAH</h1>
           <p className="mt-2 text-sm text-gray-600">
-            POS & Inventory Management
+            jl. gunung bawakaraeng. pasar sinjai block A2
           </p>
         </div>
         

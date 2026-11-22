@@ -27,6 +27,52 @@ interface ProductFormDialogProps {
 
 const DEMO_CABANG_ID = 'demo-cabang-001';
 
+/** Input harga dengan pemisah ribuan otomatis (1000 -> 1.000) */
+function PriceInput({
+  value,
+  onChange,
+  placeholder = '0',
+  className = '',
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const display = value ? new Intl.NumberFormat('id-ID').format(value) : '';
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={display}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/\D/g, '');
+        onChange(digits ? Number(digits) : 0);
+      }}
+      placeholder={placeholder}
+      className={`${className} tabular-nums`}
+    />
+  );
+}
+
+/** Indikator untung/rugi: bandingkan harga jual dengan harga modal x konversi */
+function ProfitIndicator({ price, cost }: { price: number; cost: number }) {
+  if (!price || !cost) return null;
+  const margin = price - cost;
+  if (margin < 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 whitespace-nowrap" title="Harga jual lebih kecil dari harga modal">
+        <X className="h-3 w-3" /> Rugi {formatRupiah(Math.abs(margin))}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5 whitespace-nowrap" title="Harga jual menguntungkan">
+      Untung {formatRupiah(margin)}
+    </span>
+  );
+}
+
 export function ProductFormDialog({ open, onClose, onSuccess, product }: ProductFormDialogProps) {
   const isEdit = !!product;
   
@@ -225,6 +271,18 @@ export function ProductFormDialog({ open, onClose, onSuccess, product }: Product
   const handleSubmit = async () => {
     if (!validateForm()) return;
     
+    // Peringatan jika ada harga jual di bawah modal (rugi)
+    const rugiRows = satuan.filter((s) => {
+      const cost = hargaModal * s.konversi;
+      return cost > 0 && (s.harga1 > 0 && s.harga1 < cost);
+    });
+    if (rugiRows.length > 0) {
+      const ok = window.confirm(
+        `Peringatan: ${rugiRows.length} satuan memiliki harga eceran di bawah harga modal (rugi). Tetap simpan produk?`
+      );
+      if (!ok) return;
+    }
+    
     const baseSatuan = satuan.find((s) => s.konversi === 1) || satuan[0];
     
     const data = {
@@ -354,11 +412,9 @@ export function ProductFormDialog({ open, onClose, onSuccess, product }: Product
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">Rp</span>
-                  <input
-                    type="number"
-                    value={hargaModal || ''}
-                    onChange={(e) => setHargaModal(Number(e.target.value))}
-                    placeholder="0"
+                  <PriceInput
+                    value={hargaModal}
+                    onChange={setHargaModal}
                     className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
@@ -463,46 +519,53 @@ export function ProductFormDialog({ open, onClose, onSuccess, product }: Product
 
                       {/* Harga 1 */}
                       <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={s.harga1 || ''}
-                          onChange={(e) => handleSatuanChange(index, 'harga1', Number(e.target.value))}
-                          placeholder="0"
+                        <PriceInput
+                          value={s.harga1}
+                          onChange={(v) => handleSatuanChange(index, 'harga1', v)}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-right"
                         />
+                        <div className="mt-1">
+                          <ProfitIndicator price={s.harga1} cost={hargaModal * s.konversi} />
+                        </div>
                       </div>
 
                       {/* Harga 2 */}
                       <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={s.harga2 || ''}
-                          onChange={(e) => handleSatuanChange(index, 'harga2', Number(e.target.value))}
+                        <PriceInput
+                          value={s.harga2}
+                          onChange={(v) => handleSatuanChange(index, 'harga2', v)}
                           placeholder={s.harga1 ? String(s.harga1) : '0'}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-right"
                         />
+                        <div className="mt-1">
+                          <ProfitIndicator price={s.harga2 || s.harga1} cost={hargaModal * s.konversi} />
+                        </div>
                       </div>
 
                       {/* Harga 3 */}
                       <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={s.harga3 || ''}
-                          onChange={(e) => handleSatuanChange(index, 'harga3', Number(e.target.value))}
+                        <PriceInput
+                          value={s.harga3}
+                          onChange={(v) => handleSatuanChange(index, 'harga3', v)}
                           placeholder={s.harga2 ? String(s.harga2) : s.harga1 ? String(s.harga1) : '0'}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-right"
                         />
+                        <div className="mt-1">
+                          <ProfitIndicator price={s.harga3 || s.harga2 || s.harga1} cost={hargaModal * s.konversi} />
+                        </div>
                       </div>
 
                       {/* Harga 4 */}
                       <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={s.harga4 || ''}
-                          onChange={(e) => handleSatuanChange(index, 'harga4', Number(e.target.value))}
+                        <PriceInput
+                          value={s.harga4}
+                          onChange={(v) => handleSatuanChange(index, 'harga4', v)}
                           placeholder={s.harga3 ? String(s.harga3) : s.harga2 ? String(s.harga2) : s.harga1 ? String(s.harga1) : '0'}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-right"
                         />
+                        <div className="mt-1">
+                          <ProfitIndicator price={s.harga4 || s.harga3 || s.harga2 || s.harga1} cost={hargaModal * s.konversi} />
+                        </div>
                       </div>
 
                       {/* Delete */}

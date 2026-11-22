@@ -19,8 +19,8 @@ export async function GET() {
     if (!settings) {
       settings = await prisma.pengaturanToko.create({
         data: {
-          namaToko: 'GuGaramKu',
-          alamat: '',
+          namaToko: 'TK.HAMZAH',
+          alamat: 'jl. gunung bawakaraeng. pasar sinjai block A2',
           telepon: '',
           email: '',
           logo: null,
@@ -126,8 +126,8 @@ export async function PUT(request: NextRequest) {
     } else {
       settings = await prisma.pengaturanToko.create({
         data: {
-          namaToko: namaToko || 'GuGaramKu',
-          alamat: alamat || '',
+          namaToko: namaToko || 'TK.HAMZAH',
+          alamat: alamat || 'jl. gunung bawakaraeng. pasar sinjai block A2',
           telepon: telepon || '',
           email: email || '',
           logo: logo || null,

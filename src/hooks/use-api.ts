@@ -40,6 +40,11 @@ import {
   createRetur,
   getSettings,
   updateSettings,
+  getProfile,
+  updateProfile,
+  type UpdateProfileParams,
+  getPriceLevels,
+  type PriceLevel,
   getUsers,
   createUser,
   updateUser,
@@ -346,6 +351,7 @@ export function useHeldTransactions(cabangId: string) {
     },
     enabled: !!cabangId,
     staleTime: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -720,6 +726,21 @@ export function useSettings() {
   });
 }
 
+/** Konfigurasi tingkat harga (nama & warna) dari database, bukan hardcoded di UI. */
+export function usePriceLevels() {
+  return useQuery({
+    queryKey: ['price-levels'],
+    queryFn: async () => {
+      const response = await getPriceLevels();
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal memuat tingkatan harga');
+      }
+      return response.data!;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
 
@@ -733,6 +754,41 @@ export function useUpdateSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+}
+
+// ==========================================
+// PROFILE HOOKS
+// ==========================================
+
+export function useProfile() {
+  return useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const response = await getProfile();
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal memuat profil');
+      }
+      return response.data!;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: UpdateProfileParams) => {
+      const response = await updateProfile(params);
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Gagal menyimpan profil');
+      }
+      return response.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
 }

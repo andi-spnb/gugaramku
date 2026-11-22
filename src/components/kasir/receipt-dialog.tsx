@@ -67,7 +67,52 @@ export function ReceiptDialog({ open, onClose, data, settings }: ReceiptDialogPr
   const paperWidth = printerSize === '80mm' ? '76mm' : '48mm'; // area cetak efektif
 
   const handlePrint = () => {
-    window.print();
+    // Cetak hanya area struk lewat iframe tersembunyi.
+    // window.print() biasa mencetak seluruh halaman (termasuk dashboard di belakang dialog).
+    const area = printRef.current;
+    if (!area) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      iframe.remove();
+      window.print();
+      return;
+    }
+
+    const width = printerSize === '80mm' ? '80mm' : '58mm';
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((el) => el.outerHTML)
+      .join('\n');
+
+    doc.open();
+    doc.write(`<!doctype html><html><head><meta charset="utf-8">
+      <title>Struk</title>${styles}
+      <style>
+        @page { size: ${width} auto; margin: 0; }
+        html, body { margin: 0; padding: 0; background: #fff; }
+        body { width: ${width}; padding: 2mm; font-family: 'Courier New', monospace; font-size: 10px; line-height: 1.2; }
+      </style>
+      </head><body>${area.outerHTML}</body></html>`);
+    doc.close();
+
+    const cleanup = () => setTimeout(() => iframe.remove(), 500);
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      cleanup();
+    };
+    // Fallback bila onload iframe tidak terpicu
+    setTimeout(cleanup, 10000);
   };
 
   const formatTanggal = (date: Date) =>
@@ -109,7 +154,7 @@ export function ReceiptDialog({ open, onClose, data, settings }: ReceiptDialogPr
         >
           {/* Header toko */}
           <div className="text-center">
-            <p className="text-sm font-bold uppercase">{settings?.namaToko || 'GuGaramKu'}</p>
+            <p className="text-sm font-bold uppercase">{settings?.namaToko || 'TK.HAMZAH'}</p>
             {settings?.alamat && <p className="mt-0.5">{settings.alamat}</p>}
             {settings?.telepon && <p>{settings.telepon}</p>}
           </div>

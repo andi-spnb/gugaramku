@@ -29,6 +29,9 @@ const roleRoutes: Record<string, string[]> = {
 // Routes khusus (misal OWNER-only, di luar roleRoutes umum)
 const ownerOnlyRoutes = ['/aktivitas'];
 
+// Route yang boleh diakses semua role yang sudah login
+const sharedRoutes = ['/pengaturan/profil'];
+
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
@@ -62,6 +65,11 @@ export default auth((req) => {
 
     // Role tidak dikenal: perlakukan seperti KASIR untuk cegah redirect loop
     const allowedRoutes = roleRoutes[userRole] || roleRoutes.KASIR;
+
+    // Profil sendiri: semua role boleh akses
+    if (sharedRoutes.some((r) => nextUrl.pathname === r || nextUrl.pathname.startsWith(`${r}/`))) {
+      return NextResponse.next();
+    }
     
     // OWNER bisa akses semua
     if (allowedRoutes.includes('*')) {

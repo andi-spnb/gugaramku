@@ -59,6 +59,10 @@ public/uploads/*
 logs/
 *.log
 
+# Test artifacts
+/t1.txt
+/s.json
+
 # OS
 .DS_Store
 .DS_Store?

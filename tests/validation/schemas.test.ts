@@ -9,6 +9,7 @@ import {
   stockAdjustmentSchema,
   kasMutationSchema,
   updateSettingsSchema,
+  updateProfileSchema,
 } from '@/lib/validation/schemas';
 
 const validItem = {
@@ -318,5 +319,39 @@ describe('updateSettingsSchema', () => {
     expect(updateSettingsSchema.safeParse({ namaToko: 'X', email: 'bukan-email' }).success).toBe(
       false
     );
+  });
+});
+
+describe('updateProfileSchema', () => {
+  const base = { nama: 'Owner Demo', email: 'owner@tkhamzah.com', currentPassword: 'rahasia123' };
+
+  it('menerima profil minimal', () => {
+    expect(updateProfileSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('menerima password baru dan PIN opsional', () => {
+    const result = updateProfileSchema.safeParse({ ...base, newPassword: 'baru12345', pin: '4321' });
+    expect(result.success).toBe(true);
+  });
+
+  it('mengubah PIN kosong menjadi null', () => {
+    const result = updateProfileSchema.safeParse({ ...base, pin: '' });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.pin).toBeNull();
+  });
+
+  it('menolak nama kosong dan email tidak valid', () => {
+    expect(updateProfileSchema.safeParse({ ...base, nama: '' }).success).toBe(false);
+    expect(updateProfileSchema.safeParse({ ...base, email: 'bukan-email' }).success).toBe(false);
+  });
+
+  it('menolak password baru kurang dari 6 karakter', () => {
+    expect(updateProfileSchema.safeParse({ ...base, newPassword: '123' }).success).toBe(false);
+  });
+
+  it('menolak PIN bukan 4-6 digit angka', () => {
+    expect(updateProfileSchema.safeParse({ ...base, pin: '12' }).success).toBe(false);
+    expect(updateProfileSchema.safeParse({ ...base, pin: 'abcd' }).success).toBe(false);
+    expect(updateProfileSchema.safeParse({ ...base, pin: '1234567' }).success).toBe(false);
   });
 });

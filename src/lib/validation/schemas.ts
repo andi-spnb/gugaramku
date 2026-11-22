@@ -62,6 +62,20 @@ export const resetPasswordSchema = z.object({
     .transform((v) => (v === '' ? null : v)),
 });
 
+export const updateProfileSchema = z.object({
+  nama: z.string().min(1, 'Nama harus diisi').max(100),
+  email: z.string().email('Email tidak valid').max(255),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(6, 'Password baru minimal 6 karakter').max(100).optional(),
+  pin: z
+    .union([
+      z.literal(''),
+      z.string().regex(/^\d{4,6}$/, 'PIN harus 4-6 digit angka'),
+    ])
+    .nullish()
+    .transform((v) => (v === '' ? null : v)),
+});
+
 // ===========================================
 // BRANCHES (CABANG)
 // ===========================================
@@ -210,8 +224,9 @@ export const createReturSchema = z.object({
 // ===========================================
 
 const transactionItemSchema = z.object({
-  produkId: id.nullish(),
-  produkSatuanId: id.nullish(),
+  // Quick sale tidak punya produk/produkSatuan, jadi null harus diterima (bukan hanya undefined)
+  produkId: id.nullable().optional(),
+  produkSatuanId: id.nullable().optional(),
   namaBarang: z.string().min(1, 'Nama barang harus diisi').max(200),
   barcode: optionalText(100),
   jumlah: positiveNumber,
@@ -264,10 +279,15 @@ export const holdTransactionSchema = z.object({
 
 const rekeningBankSchema = z.array(
   z.object({
+    id: z.string().max(100).optional(),
+    // Nama field mengikuti yang disimpan UI pengaturan: bank / noRekening / atasNama.
+    // namaBank & nomorRekening dipertahankan untuk kompatibilitas data lama.
+    bank: z.string().max(100).optional(),
+    noRekening: z.string().max(100).optional(),
     namaBank: z.string().max(100).optional(),
     nomorRekening: z.string().max(100).optional(),
     atasNama: z.string().max(100).optional(),
-  })
+  }).passthrough()
 );
 
 export const updateSettingsSchema = z.object({
