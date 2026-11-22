@@ -205,6 +205,8 @@ export interface CreateTransactionParams {
   cabangId?: string;
   kasirId?: string;
   pelangganId?: string | null;
+  /** Idempotency key (UUID) untuk retry offline: payload sama = transaksi sama. */
+  clientRef?: string | null;
   tingkatHarga: number;
   metodeBayar: 'TUNAI' | 'QRIS' | 'TRANSFER' | 'HUTANG' | 'SPLIT';
   jumlahBayar: number;

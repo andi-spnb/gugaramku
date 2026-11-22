@@ -284,6 +284,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create retur and update stock in transaction
+    let hutangKredit = 0;
     const retur = await prisma.$transaction(async (tx) => {
       // Re-check retur kumulatif DI DALAM transaction (cegah race double refund:
       // dua request retur bersamaan untuk item yang sama)
@@ -395,8 +396,31 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // If refund is TUNAI, create kas keluar
-      if (metodeRefund === 'TUNAI' && totalRefund > 0) {
+      // Retur atas transaksi HUTANG: refund dikreditkan ke sisa hutang dulu
+      // (barang kembali -> hutang berkurang). Kas keluar hanya untuk
+      // kelebihan refund di atas sisa hutang, bukan jumlah penuh.
+      let refundKas = totalRefund;
+      if (transaksi.metodeBayar === 'HUTANG') {
+        const hutang = await tx.hutang.findFirst({
+          where: { transaksiId: transaksiId, status: 'BELUM_LUNAS' },
+        });
+        if (hutang) {
+          const kredit = Math.min(totalRefund, Number(hutang.sisa));
+          const sisaBaru = Number(hutang.sisa) - kredit;
+          await tx.hutang.update({
+            where: { id: hutang.id },
+            data: {
+              sisa: sisaBaru,
+              status: sisaBaru === 0 ? 'LUNAS' : 'BELUM_LUNAS',
+            },
+          });
+          refundKas = totalRefund - kredit;
+          hutangKredit = kredit;
+        }
+      }
+
+      // Jika ada sisa refund tunai, create kas keluar
+      if (metodeRefund === 'TUNAI' && refundKas > 0) {
         // Get current kas
         let kas = await tx.kas.findUnique({
           where: { cabangId },
@@ -409,7 +433,7 @@ export async function POST(request: NextRequest) {
         }
 
         const saldoSebelum = kas.saldo;
-        const saldoSesudah = saldoSebelum - totalRefund;
+        const saldoSesudah = saldoSebelum - refundKas;
 
         // Tolak refund tunai yang membuat saldo kas negatif
         if (saldoSesudah < 0) {
@@ -422,7 +446,7 @@ export async function POST(request: NextRequest) {
             cabangId,
             jenis: 'KELUAR',
             kategori: 'RETUR',
-            nominal: totalRefund,
+            nominal: refundKas,
             saldoSebelum,
             saldoSesudah,
             keterangan: `Refund retur ${newRetur.nomor}`,
@@ -460,6 +484,7 @@ export async function POST(request: NextRequest) {
         pelanggan: retur.transaksiAsal.pelanggan?.nama || 'Umum',
       },
       totalRefund: retur.totalRefund,
+      hutangKredit,
       metodeRefund: retur.metodeRefund,
       alasan: retur.alasan,
       catatan: retur.catatan,

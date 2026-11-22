@@ -53,7 +53,12 @@ export async function POST(request: NextRequest) {
         tingkatHarga: body.tingkatHarga,
         diskon: item.diskon,
         subtotal: itemSubtotal,
-        laba: (item.hargaJual - item.hargaModal) * item.jumlah - item.diskon,
+        // Quick sale: modal dari client per satuan jual (UI kirim 0).
+        // Barang terdaftar: modal per satuan dasar, kalikan konversi.
+        laba:
+          (item.hargaJual - item.hargaModal * (item.isQuickSale ? 1 : item.konversi)) *
+            item.jumlah -
+          item.diskon,
         isQuickSale: item.isQuickSale,
       };
     });

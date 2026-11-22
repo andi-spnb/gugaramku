@@ -47,11 +47,23 @@ export async function POST(
         throw new Error('SUDAH_LUNAS');
       }
 
-      const sisaBaru = Number(hutang.sisa) - Number(jumlah);
+      // Update ATOMIK: hanya kurangi sisa bila sisa >= jumlah.
+      // Dua pembayaran bersamaan: yang kedua gagal di where-clause, bukan overpayment.
+      const updated = await tx.hutang.updateMany({
+        where: { id: params.id, sisa: { gte: jumlah } },
+        data: { sisa: { decrement: jumlah } },
+      });
 
-      if (sisaBaru < 0) {
+      if (updated.count === 0) {
         throw new Error(`OVERPAYMENT:${Number(hutang.sisa)}`);
       }
+
+      // Baca ulang sisa terbaru di dalam transaksi yang sama
+      const current = await tx.hutang.findUnique({
+        where: { id: params.id },
+        select: { sisa: true },
+      });
+      const sisaBaru = Number(current?.sisa ?? 0);
 
       // Create payment record (userId dari session)
       const pembayaran = await tx.hutangPembayaran.create({
@@ -64,11 +76,10 @@ export async function POST(
         },
       });
 
-      // Update debt
+      // Update status berdasarkan sisa terbaru
       const updatedHutang = await tx.hutang.update({
         where: { id: params.id },
         data: {
-          sisa: sisaBaru,
           status: sisaBaru === 0 ? 'LUNAS' : 'BELUM_LUNAS',
         },
         include: {

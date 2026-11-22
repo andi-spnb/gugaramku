@@ -34,6 +34,7 @@ import {
   useDeleteHeldTransaction,
   useSettings,
   usePriceLevels,
+  ApiRequestError,
 } from '@/hooks/use-api';
 import { useBarcodeScanner } from '@/hooks/use-barcode-scanner';
 import { getProductByBarcode } from '@/lib/api';
@@ -565,6 +566,9 @@ export function KasirPage() {
       isSubmittingRef.current = true;
 
       const transactionData = {
+        // Idempotency key: payload yang sama (saat retry offline) dianggap
+        // transaksi yang sama oleh server.
+        clientRef: generateUUID(),
         tingkatHarga,
         metodeBayar: paymentData.metodeBayar as MetodeBayar,
         jumlahBayar: paymentData.jumlahBayar,
@@ -621,26 +625,38 @@ export function KasirPage() {
         setIsPaymentOpen(false);
       } catch (error) {
         console.error('Transaction API error:', error);
-        try {
-          await enqueueTransaction({
-            payload: transactionData,
-            itemCount: cartItems.length,
-            total: paymentTotal,
+        // Hanya error jaringan/server yang layak masuk antrean offline.
+        // Error bisnis 4xx (stok kurang, validasi, limit hutang) tidak akan
+        // berhasil juga saat dikirim ulang — tampilkan, keranjang dipertahankan.
+        const code = error instanceof ApiRequestError ? error.code : 'NETWORK_ERROR';
+        const retryable =
+          code === 'NETWORK_ERROR' || code === 'INTERNAL_ERROR' || code === 'UNKNOWN_ERROR';
+        if (retryable) {
+          try {
+            await enqueueTransaction({
+              payload: transactionData,
+              itemCount: cartItems.length,
+              total: paymentTotal,
+            });
+            const queue = await getPendingTransactions();
+            setPendingOffline(queue);
+            toast.error(
+              `Gagal menyimpan transaksi. Tersimpan offline (${queue.length} menunggu). Kirim ulang saat koneksi pulih.`,
+              { duration: 3500 }
+            );
+            setCartItems([]);
+            setDiskonTotal(0);
+          } catch (offlineError) {
+            console.error('Offline queue error:', offlineError);
+            toast.error(
+              'Gagal menyimpan transaksi. Keranjang tetap ada, coba bayar ulang atau periksa koneksi.',
+              { duration: 3500 }
+            );
+          }
+        } else {
+          toast.error(error instanceof Error ? error.message : 'Gagal menyimpan transaksi', {
+            duration: 5000,
           });
-          const queue = await getPendingTransactions();
-          setPendingOffline(queue);
-          toast.error(
-            `Gagal menyimpan transaksi. Tersimpan offline (${queue.length} menunggu). Kirim ulang saat koneksi pulih.`,
-            { duration: 3500 }
-          );
-          setCartItems([]);
-          setDiskonTotal(0);
-        } catch (offlineError) {
-          console.error('Offline queue error:', offlineError);
-          toast.error(
-            'Gagal menyimpan transaksi. Keranjang tetap ada, coba bayar ulang atau periksa koneksi.',
-            { duration: 3500 }
-          );
         }
         setIsPaymentOpen(false);
       } finally {
@@ -665,6 +681,7 @@ export function KasirPage() {
 
     try {
       let berhasil = 0;
+      let ditolak = 0;
       for (const pending of pendingOffline) {
         try {
           await createTransactionMutation.mutateAsync(
@@ -674,7 +691,18 @@ export function KasirPage() {
           berhasil += 1;
         } catch (error) {
           console.error('Retry gagal untuk transaksi offline:', error);
-          break;
+          const code = error instanceof ApiRequestError ? error.code : 'NETWORK_ERROR';
+          const retryable =
+            code === 'NETWORK_ERROR' || code === 'INTERNAL_ERROR' || code === 'UNKNOWN_ERROR';
+          if (retryable) {
+            // Server tidak bisa dihubungi: hentikan, sisa antrean dicoba lagi nanti.
+            break;
+          }
+          // Error bisnis (4xx): transaksi ini tidak akan pernah berhasil dikirim
+          // (mis. stok habis saat offline). Biarkan di antrean agar bisa diperiksa,
+          // lanjut ke item berikutnya.
+          ditolak += 1;
+          continue;
         }
       }
       const queue = await getPendingTransactions();
@@ -682,7 +710,14 @@ export function KasirPage() {
 
       if (berhasil > 0) {
         toast.success(`${berhasil} transaksi offline berhasil dikirim.`);
-      } else {
+      }
+      if (ditolak > 0) {
+        toast.warning(
+          `${ditolak} transaksi offline ditolak server (mis. stok tidak cukup). Periksa dan input ulang.`,
+          { duration: 6000 }
+        );
+      }
+      if (berhasil === 0 && ditolak === 0) {
         toast.error('Masih gagal mengirim transaksi offline. Coba lagi nanti.');
       }
     } finally {

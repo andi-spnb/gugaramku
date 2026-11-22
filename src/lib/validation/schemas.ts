@@ -223,25 +223,48 @@ export const createReturSchema = z.object({
 // TRANSACTIONS
 // ===========================================
 
-const transactionItemSchema = z.object({
-  // Quick sale tidak punya produk/produkSatuan, jadi null harus diterima (bukan hanya undefined)
-  produkId: id.nullable().optional(),
-  produkSatuanId: id.nullable().optional(),
-  namaBarang: z.string().min(1, 'Nama barang harus diisi').max(200),
-  barcode: optionalText(100),
-  jumlah: positiveNumber,
-  satuan: z.string().min(1).max(50),
-  konversi: z
-    .number({ invalid_type_error: 'Konversi harus berupa angka' })
-    .min(1, 'Konversi minimal 1'),
-  hargaModal: nonNegativeNumber,
-  hargaJual: nonNegativeNumber,
-  diskon: nonNegativeNumber,
-  isQuickSale: z.boolean(),
-});
+const transactionItemSchema = z
+  .object({
+    // Quick sale tidak punya produk/produkSatuan, jadi null harus diterima (bukan hanya undefined)
+    produkId: id.nullable().optional(),
+    produkSatuanId: id.nullable().optional(),
+    namaBarang: z.string().min(1, 'Nama barang harus diisi').max(200),
+    barcode: optionalText(100),
+    jumlah: positiveNumber,
+    satuan: z.string().min(1).max(50),
+    konversi: z
+      .number({ invalid_type_error: 'Konversi harus berupa angka' })
+      .min(1, 'Konversi minimal 1'),
+    hargaModal: nonNegativeNumber,
+    hargaJual: nonNegativeNumber,
+    diskon: nonNegativeNumber,
+    isQuickSale: z.boolean(),
+  })
+  .superRefine((item, ctx) => {
+    // Anti-fraud: quick sale tidak boleh membawa produk terdaftar — kalau tidak,
+    // item produk asli bisa "dijual" dengan harga bebas tanpa potong stok.
+    if (item.isQuickSale && (item.produkId || item.produkSatuanId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Quick sale tidak boleh memiliki produk terdaftar',
+        path: ['produkId'],
+      });
+    }
+    // Barang terdaftar wajib punya satuan: harga & stok selalu diambil dari DB.
+    if (!item.isQuickSale && !item.produkSatuanId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Satuan produk wajib untuk barang terdaftar',
+        path: ['produkSatuanId'],
+      });
+    }
+  });
 
 export const createTransactionSchema = z.object({
   pelangganId: id.nullish(),
+  // Idempotency key dari client (UUID) untuk retry offline: server menolak
+  // membuat transaksi kedua dengan clientRef yang sama.
+  clientRef: optionalText(64),
   tingkatHarga: z
     .number({ invalid_type_error: 'Tingkat harga harus berupa angka' })
     .int()

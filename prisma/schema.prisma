@@ -214,6 +214,7 @@ model Transaksi {
   status       String   @default("SELESAI") // SELESAI, BATAL, HOLD
   statusSync   String   @default("SYNCED") @map("status_sync") // PENDING, SYNCED, CONFLICT
   deviceId     String?  @map("device_id")
+  clientRef    String?  @unique @map("client_ref") // idempotency key untuk retry offline
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

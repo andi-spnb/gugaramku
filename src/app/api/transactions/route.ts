@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/db/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { parseBody } from '@/lib/validation/parse';
@@ -9,6 +10,26 @@ import { logActivity } from '@/lib/audit-log';
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
+
+// Include lengkap untuk membaca transaksi beserta relasinya (dipakai create & idempotency check)
+const transaksiFullInclude: Prisma.TransaksiInclude = {
+  cabang: true,
+  kasir: {
+    select: {
+      id: true,
+      nama: true,
+      email: true,
+      role: true,
+      cabangId: true,
+      isActive: true,
+      lastLogin: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
+  pelanggan: true,
+  detailTransaksi: true,
+};
 
 function validationError(
   message: string,
@@ -146,7 +167,7 @@ export async function POST(request: NextRequest) {
         hargaJual,
         diskon: item.diskon,
         subtotal: itemSubtotal,
-        laba: (hargaJual - hargaModal) * item.jumlah - item.diskon,
+        laba: (hargaJual - hargaModal * konversi) * item.jumlah - item.diskon,
         isQuickSale: false,
         tingkatHarga: tingkat,
         qtyInBaseUnit: item.jumlah * konversi,
@@ -165,9 +186,10 @@ export async function POST(request: NextRequest) {
     }
     const jumlahBayar = body.jumlahBayar;
 
-    // Tunai harus lunas
-    if (metodeBayar === 'TUNAI' && jumlahBayar < total) {
-      return validationError('Jumlah bayar kurang dari total untuk pembayaran tunai');
+    // Semua metode non-HUTANG wajib lunas (TUNAI, QRIS, TRANSFER).
+    // Tanpa ini, QRIS/TRANSFER Rp0 untuk barang ratusan ribu tercatat "lunas".
+    if (metodeBayar !== 'HUTANG' && jumlahBayar < total) {
+      return validationError('Jumlah bayar kurang dari total');
     }
 
     const kembalian = metodeBayar === 'TUNAI' ? jumlahBayar - total : 0;
@@ -179,6 +201,18 @@ export async function POST(request: NextRequest) {
 
     // Buat transaksi atomik
     const result = await prisma.$transaction(async (tx) => {
+      // IDEMPOTENSI (retry offline): payload dengan clientRef yang sama hanya
+      // diproses sekali. Retry setelah timeout/network error tidak membuat
+      // transaksi ganda dan tidak memotong stok dua kali.
+      const clientRef = body.clientRef || null;
+      if (clientRef) {
+        const existing = await tx.transaksi.findUnique({
+          where: { clientRef },
+          include: transaksiFullInclude,
+        });
+        if (existing) return existing;
+      }
+
       // Cek limit hutang pelanggan (di dalam transaction)
       if (metodeBayar === 'HUTANG' && body.pelangganId) {
         const pelanggan = await tx.pelanggan.findUnique({
@@ -245,6 +279,7 @@ export async function POST(request: NextRequest) {
           cabangId,
           kasirId,
           pelangganId: body.pelangganId || null,
+          clientRef,
           tanggal: new Date(),
           tingkatHarga: tingkat,
           subtotal,
@@ -260,24 +295,7 @@ export async function POST(request: NextRequest) {
             create: detailItems.map(({ qtyInBaseUnit: _q, ...rest }) => rest),
           },
         },
-        include: {
-          cabang: true,
-          kasir: {
-            select: {
-              id: true,
-              nama: true,
-              email: true,
-              role: true,
-              cabangId: true,
-              isActive: true,
-              lastLogin: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          },
-          pelanggan: true,
-          detailTransaksi: true,
-        },
+        include: transaksiFullInclude,
       });
 
       // Catat mutasi stok (jumlahSebelum/Sesudah dibaca ulang di dalam tx)

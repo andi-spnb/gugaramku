@@ -84,6 +84,22 @@ import {
 } from '@/lib/api';
 import type { ProdukWithDetails, Kategori } from '@/types';
 
+/**
+ * Error dari API yang membawa kode error-nya.
+ * Dipakai untuk membedakan error bisnis (4xx, mis. VALIDATION_ERROR /
+ * STOCK_INSUFFICIENT) dari error jaringan/server (NETWORK_ERROR /
+ * INTERNAL_ERROR) — penting untuk memutuskan apakah transaksi offline
+ * layak di-retry atau tidak.
+ */
+export class ApiRequestError extends Error {
+  code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.code = code;
+  }
+}
+
 // ==========================================
 // CATEGORIES HOOKS
 // ==========================================
@@ -294,7 +310,10 @@ export function useCreateTransaction() {
     mutationFn: async (params: CreateTransactionParams) => {
       const response = await createTransaction(params);
       if (!response.success) {
-        throw new Error(response.error?.message || 'Gagal menyimpan transaksi');
+        throw new ApiRequestError(
+          response.error?.message || 'Gagal menyimpan transaksi',
+          response.error?.code || 'UNKNOWN_ERROR'
+        );
       }
       return response.data!;
     },
