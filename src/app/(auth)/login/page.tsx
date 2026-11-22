@@ -2,7 +2,6 @@
 
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Eye, EyeOff, Mail, Lock, KeyRound, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -252,12 +251,9 @@ function LoginForm() {
           </label>
           
           {mode === 'password' && (
-            <Link
-              href="/forgot-password"
-              className="text-sm font-medium text-primary hover:text-primary/80"
-            >
-              Lupa password?
-            </Link>
+            <span className="text-sm text-gray-400" title="Hubungi owner untuk reset password">
+              Lupa password? Hubungi owner
+            </span>
           )}
         </div>
 

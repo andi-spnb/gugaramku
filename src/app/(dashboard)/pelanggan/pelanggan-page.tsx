@@ -7,6 +7,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { formatRupiah } from '@/lib/utils';
 import type { Customer } from '@/lib/api';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { Pagination } from '@/components/ui/pagination';
 
 const KATEGORI_OPTIONS = [
   { value: 'RETAIL', label: 'Retail', color: 'bg-blue-100 text-blue-700' },
@@ -186,9 +188,7 @@ export function PelangganPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-        </div>
+        <TableSkeleton rows={6} />
       ) : isError ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -280,6 +280,18 @@ export function PelangganPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Pagination */}
+      {data?.meta && (
+        <Pagination
+          page={page}
+          totalPages={data.meta.totalPages}
+          total={data.meta.total}
+          limit={50}
+          label="pelanggan"
+          onPage={setPage}
+        />
       )}
 
       {/* Form Dialog */}

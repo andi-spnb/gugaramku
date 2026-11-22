@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import {
   Menu,
-  Bell,
-  Search,
   User,
   LogOut,
   Settings,
@@ -80,15 +78,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="hidden h-6 w-px bg-gray-200 lg:hidden" />
 
       <div className="flex min-w-0 flex-1 gap-x-4 self-stretch lg:gap-x-6">
-        {/* Search */}
-        <div className="relative flex flex-1 items-center">
-          <Search className="pointer-events-none absolute left-3 h-5 w-5 text-gray-400" />
-          <input
-            type="search"
-            placeholder="Cari produk, transaksi..."
-            className="h-10 w-full max-w-md rounded-lg border border-gray-300 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
+        {/* Pencarian global disembunyikan sampai fungsinya siap,
+            supaya tidak menampilkan kontrol mati ke kasir */}
 
         <div className="flex items-center gap-x-3 sm:gap-x-4 lg:gap-x-6">
           {/* Online/Offline indicator */}
@@ -113,18 +104,8 @@ export function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
 
-          {/* Notifications */}
-          <button
-            type="button"
-            className="relative -m-2.5 p-2.5 text-gray-500 hover:text-gray-700"
-          >
-            <span className="sr-only">Lihat notifikasi</span>
-            <Bell className="h-5 w-5" />
-            {/* Notification badge */}
-            <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
-              3
-            </span>
-          </button>
+          {/* Notifications: disembunyikan sampai ada sumber notifikasi asli
+              (badge statis "3" menyesatkan kasir) */}
 
           {/* Separator */}
           <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200" />

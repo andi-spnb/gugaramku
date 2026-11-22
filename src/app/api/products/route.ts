@@ -201,10 +201,12 @@ export async function GET(request: NextRequest) {
     };
 
     // Search by name or barcode
+    // SQLite tidak mendukung `mode: 'insensitive'`; LIKE di SQLite sudah
+    // case-insensitive untuk ASCII, jadi cukup `contains`.
     if (search) {
       where.OR = [
-        { nama: { contains: search, mode: 'insensitive' } },
-        { barcode: { contains: search, mode: 'insensitive' } },
+        { nama: { contains: search } },
+        { barcode: { contains: search } },
       ];
     }
 

@@ -6,6 +6,8 @@ import { useStock, useCategories, useCreateAdjustment, useStockMutations } from 
 import { toast } from 'sonner';
 import { formatRupiah } from '@/lib/utils';
 import type { StockItem } from '@/lib/api';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { Pagination } from '@/components/ui/pagination';
 
 type TabType = 'stock' | 'mutations';
 type AdjustmentType = 'ADJUSTMENT_PLUS' | 'ADJUSTMENT_MINUS' | 'OPNAME' | 'RUSAK' | 'EXPIRED';
@@ -24,6 +26,9 @@ export function StokPage() {
   const [kategoriFilter, setKategoriFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'normal' | 'low' | 'empty' | ''>('');
   const [page, setPage] = useState(1);
+  const [mutationPage, setMutationPage] = useState(1);
+  const STOCK_LIMIT = 50;
+  const MUTATION_LIMIT = 100;
 
   // Adjustment dialog
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
@@ -39,12 +44,12 @@ export function StokPage() {
     kategoriId: kategoriFilter || undefined,
     status: statusFilter || undefined,
     page,
-    limit: 50,
+    limit: STOCK_LIMIT,
   });
 
   const { data: mutationsData, isLoading: isMutationsLoading } = useStockMutations({
-    page: 1,
-    limit: 100,
+    page: mutationPage,
+    limit: MUTATION_LIMIT,
   });
 
   const adjustmentMutation = useCreateAdjustment();
@@ -213,9 +218,7 @@ export function StokPage() {
 
           {/* Stock Table */}
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            </div>
+            <TableSkeleton rows={6} />
           ) : isError ? (
             <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
               <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -295,14 +298,24 @@ export function StokPage() {
               </div>
             </div>
           )}
+
+          {/* Pagination stok */}
+          {stockData?.meta && (
+            <Pagination
+              page={page}
+              totalPages={stockData.meta.totalPages}
+              total={stockData.meta.total}
+              limit={STOCK_LIMIT}
+              label="item stok"
+              onPage={setPage}
+            />
+          )}
         </>
       ) : (
         /* Mutations Tab */
         <>
           {isMutationsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            </div>
+            <TableSkeleton rows={6} />
           ) : !mutationsData?.mutations.length ? (
             <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
               <ClipboardList className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -357,6 +370,18 @@ export function StokPage() {
                 </table>
               </div>
             </div>
+          )}
+
+          {/* Pagination mutasi */}
+          {mutationsData?.meta && (
+            <Pagination
+              page={mutationPage}
+              totalPages={mutationsData.meta.totalPages}
+              total={mutationsData.meta.total}
+              limit={MUTATION_LIMIT}
+              label="mutasi"
+              onPage={setMutationPage}
+            />
           )}
         </>
       )}

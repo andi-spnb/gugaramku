@@ -28,6 +28,8 @@ import {
 } from '@/hooks/use-api';
 import { toast } from 'sonner';
 import type { User as UserType } from '@/lib/api';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { Pagination } from '@/components/ui/pagination';
 
 const ROLE_OPTIONS = [
   { value: 'OWNER', label: 'Owner', icon: ShieldCheck, color: 'text-purple-600 bg-purple-100' },
@@ -42,6 +44,8 @@ export function KaryawanPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | 'true' | 'false'>('');
+  const [page, setPage] = useState(1);
+  const LIMIT = 50;
 
   // Dialog state
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -62,6 +66,8 @@ export function KaryawanPage() {
     search: search || undefined,
     role: roleFilter || undefined,
     isActive: statusFilter !== '' ? statusFilter === 'true' : undefined,
+    page,
+    limit: LIMIT,
   });
 
   // Mutations
@@ -273,9 +279,7 @@ export function KaryawanPage() {
 
       {/* User List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-        </div>
+        <TableSkeleton rows={5} />
       ) : isError ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -439,6 +443,18 @@ export function KaryawanPage() {
           </table>
           </div>
         </div>
+      )}
+
+      {/* Pagination */}
+      {data?.meta && (
+        <Pagination
+          page={page}
+          totalPages={data.meta.totalPages}
+          total={data.meta.total}
+          limit={LIMIT}
+          label="karyawan"
+          onPage={setPage}
+        />
       )}
 
       {/* Create/Edit Dialog */}

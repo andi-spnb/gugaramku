@@ -2,98 +2,33 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Camera, Loader2, Package, Plus, WifiOff } from 'lucide-react';
-import { formatRupiah } from '@/lib/utils';
+import { cn, formatRupiah } from '@/lib/utils';
 import { getPriceByLevel } from '@/lib/constants/price-levels';
 import { useProductSearch } from '@/hooks/use-api';
 import type { ProdukWithDetails, ProdukSatuan } from '@/types';
 
-// Data dummy produk untuk fallback ketika offline atau API belum tersedia
-const DUMMY_PRODUCTS: ProdukWithDetails[] = [
-  {
-    id: '1',
-    barcode: '8991234567890',
-    nama: 'Indomie Goreng',
-    kategoriId: '1',
-    hargaModal: 2800,
-    satuanDasar: 'bks',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    produkSatuan: [
-      { id: '1a', produkId: '1', namaSatuan: 'bks', konversi: 1, harga1: 3500, harga2: 3300, harga3: 3200, harga4: 3100, isDefault: true, urutan: 1, createdAt: new Date(), updatedAt: new Date() },
-      { id: '1b', produkId: '1', namaSatuan: 'dos', konversi: 40, harga1: 135000, harga2: 130000, harga3: 125000, harga4: 120000, isDefault: false, urutan: 2, createdAt: new Date(), updatedAt: new Date() },
-    ],
-  },
-  {
-    id: '2',
-    barcode: '8992345678901',
-    nama: 'Gula Pasir 1kg',
-    kategoriId: '2',
-    hargaModal: 12000,
-    satuanDasar: 'pcs',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    produkSatuan: [
-      { id: '2a', produkId: '2', namaSatuan: 'pcs', konversi: 1, harga1: 15000, harga2: 14000, harga3: 13500, harga4: 13000, isDefault: true, urutan: 1, createdAt: new Date(), updatedAt: new Date() },
-    ],
-  },
-  {
-    id: '3',
-    barcode: '8993456789012',
-    nama: 'Kopi ABC Sachet',
-    kategoriId: '3',
-    hargaModal: 1000,
-    satuanDasar: 'sct',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    produkSatuan: [
-      { id: '3a', produkId: '3', namaSatuan: 'sct', konversi: 1, harga1: 1500, harga2: 1400, harga3: 1300, harga4: 1200, isDefault: true, urutan: 1, createdAt: new Date(), updatedAt: new Date() },
-      { id: '3b', produkId: '3', namaSatuan: 'rncg', konversi: 10, harga1: 14000, harga2: 13000, harga3: 12500, harga4: 12000, isDefault: false, urutan: 2, createdAt: new Date(), updatedAt: new Date() },
-      { id: '3c', produkId: '3', namaSatuan: 'dos', konversi: 120, harga1: 160000, harga2: 150000, harga3: 145000, harga4: 140000, isDefault: false, urutan: 3, createdAt: new Date(), updatedAt: new Date() },
-    ],
-  },
-  {
-    id: '4',
-    barcode: '8994567890123',
-    nama: 'Sampoerna Mild',
-    kategoriId: '4',
-    hargaModal: 25000,
-    satuanDasar: 'bks',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    produkSatuan: [
-      { id: '4a', produkId: '4', namaSatuan: 'bks', konversi: 1, harga1: 28000, harga2: 27500, harga3: 27000, harga4: 26500, isDefault: true, urutan: 1, createdAt: new Date(), updatedAt: new Date() },
-      { id: '4b', produkId: '4', namaSatuan: 'slp', konversi: 10, harga1: 275000, harga2: 270000, harga3: 265000, harga4: 260000, isDefault: false, urutan: 2, createdAt: new Date(), updatedAt: new Date() },
-    ],
-  },
-  {
-    id: '5',
-    barcode: '8995678901234',
-    nama: 'Chitato Original',
-    kategoriId: '5',
-    hargaModal: 1500,
-    satuanDasar: 'bks',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    produkSatuan: [
-      { id: '5a', produkId: '5', namaSatuan: 'bks', konversi: 1, harga1: 2000, harga2: 1800, harga3: 1700, harga4: 1600, isDefault: true, urutan: 1, createdAt: new Date(), updatedAt: new Date() },
-      { id: '5b', produkId: '5', namaSatuan: 'gtg', konversi: 10, harga1: 18000, harga2: 17000, harga3: 16000, harga4: 15000, isDefault: false, urutan: 2, createdAt: new Date(), updatedAt: new Date() },
-    ],
-  },
-];
-
 interface ProductSearchProps {
   onSelectProduct: (produk: ProdukWithDetails, satuan: ProdukSatuan, jumlah?: number) => void;
+  /** Dipanggil saat produk diklik: buka dialog pilih satuan (opsional, default langsung tambah) */
+  onOpenProduct?: (produk: ProdukWithDetails) => void;
   onQuickSale: () => void;
   tingkatHarga: number;
   onCameraScan?: () => void;
+  /** Cabang aktif untuk menghitung stok yang ditampilkan */
+  cabangId?: string;
+  /** Jumlah yang sudah ada di keranjang untuk cek batas stok */
+  getStockInfo?: (produk: ProdukWithDetails) => { total: number; inCart: number };
 }
 
-export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga, onCameraScan }: ProductSearchProps) {
+export function ProductSearch({
+  onSelectProduct,
+  onOpenProduct,
+  onQuickSale,
+  tingkatHarga,
+  onCameraScan,
+  cabangId,
+  getStockInfo,
+}: ProductSearchProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -106,88 +41,70 @@ export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga, onCa
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Use API hook for product search
-  const { data: apiProducts, isLoading, isError, isFetched } = useProductSearch(debouncedSearch, {
+  const { data: apiProducts, isLoading, isError, isFetched, dataUpdatedAt } = useProductSearch(debouncedSearch, {
     enabled: true,
   });
 
-  // Use API data or fallback to dummy data
   const products = useMemo(() => {
-    // Jika sudah fetch dan berhasil, gunakan data API
-    if (isFetched && !isError && apiProducts) {
-      return apiProducts;
-    }
-    
-    // Jika error atau belum fetch, fallback ke dummy
-    if (isError) {
-      if (!debouncedSearch.trim()) return DUMMY_PRODUCTS;
-      const lowercaseTerm = debouncedSearch.toLowerCase();
-      return DUMMY_PRODUCTS.filter(
-        (p) =>
-          p.nama.toLowerCase().includes(lowercaseTerm) ||
-          p.barcode?.toLowerCase().includes(lowercaseTerm)
-      );
-    }
-    
-    // Saat loading, tampilkan data kosong (biar loading spinner muncul)
-    if (isLoading) {
-      return [];
-    }
-    
-    // Default: gunakan API data jika ada, atau dummy
-    return apiProducts || DUMMY_PRODUCTS;
-  }, [apiProducts, isError, isLoading, isFetched, debouncedSearch]);
+    if (isFetched && !isError && apiProducts) return apiProducts;
+    if (isLoading) return [];
+    return apiProducts || [];
+  }, [apiProducts, isError, isLoading, isFetched]);
 
   // Focus search input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // F2 to focus search
-      if (e.key === 'F2') {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   const handleSelectProduct = (produk: ProdukWithDetails) => {
-    // Get default unit
     const defaultSatuan = produk.produkSatuan?.find((s) => s.isDefault) || produk.produkSatuan?.[0];
-    if (defaultSatuan) {
-      onSelectProduct(produk, defaultSatuan, 1);
+    if (!defaultSatuan) return;
+    // Klik: tampilkan dulu pilihan satuan, jumlah, dan stok
+    if (onOpenProduct) {
+      onOpenProduct(produk);
+      return;
     }
+    onSelectProduct(produk, defaultSatuan, 1);
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Search Input */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="shrink-0 border-b border-gray-200 p-4">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
             <input
               ref={inputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Cari nama produk atau scan barcode... (F2)"
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              onKeyDown={(e) => {
+                // Enter pada hasil pencarian: tambahkan produk pertama (perilaku scan).
+                // Hanya saat ada kata kunci/scan, bukan saat menampilkan daftar awal.
+                if (e.key === 'Enter' && products.length > 0 && debouncedSearch.trim()) {
+                  e.preventDefault();
+                  const first = products[0];
+                  const anyStock = getStockInfo ? getStockInfo(first).total : 1;
+                  if (anyStock > 0) {
+                    // Enter/scan: langsung tambah satuan default tanpa dialog
+                    const def =
+                      first.produkSatuan?.find((s) => s.isDefault) || first.produkSatuan?.[0];
+                    if (def) onSelectProduct(first, def, 1);
+                  }
+                }
+              }}
+              placeholder="Cari nama produk atau scan barcode..."
+              className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
             {isLoading && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
             )}
           </div>
           <button
             type="button"
             onClick={onCameraScan}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2.5 text-gray-700 transition-colors hover:bg-gray-200"
             title="Scan barcode via kamera"
           >
             <Camera className="h-5 w-5" />
@@ -196,7 +113,7 @@ export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga, onCa
           <button
             type="button"
             onClick={onQuickSale}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2.5 text-primary transition-colors hover:bg-primary/20"
             title="Quick Sale - Jual barang tidak terdaftar"
           >
             <Plus className="h-5 w-5" />
@@ -205,67 +122,147 @@ export function ProductSearch({ onSelectProduct, onQuickSale, tingkatHarga, onCa
         </div>
       </div>
 
-      {/* Offline indicator */}
       {isError && (
-        <div className="mx-4 mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-sm text-amber-700">
+        <div className="mx-4 mt-3 flex shrink-0 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <WifiOff className="h-4 w-4" />
-          <span>Mode offline - menampilkan data lokal</span>
+          <span>Gagal memuat produk. Periksa koneksi lalu muat ulang.</span>
         </div>
       )}
 
-      {/* Product Grid */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {products.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Package className="h-12 w-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">Produk tidak ditemukan</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Coba kata kunci lain atau tambah produk baru
+      {/* Product List (baris kompak, tanpa gambar) */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin" data-refresh={dataUpdatedAt}>
+        {isLoading ? (
+          <div className="divide-y divide-gray-100" aria-hidden="true">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="skeleton h-4 flex-1" />
+                <div className="skeleton h-4 w-24" />
+                <div className="skeleton h-4 w-14" />
+              </div>
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <Package className="mb-3 h-12 w-12 text-gray-300" />
+            <p className="font-medium text-gray-500">Produk tidak ditemukan</p>
+            <p className="mt-1 text-sm text-gray-400">
+              Coba kata kunci lain, scan barcode, atau tambah produk baru
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {products.map((produk) => {
-              const defaultSatuan = produk.produkSatuan?.find((s) => s.isDefault) || produk.produkSatuan?.[0];
-              const harga = defaultSatuan ? getPriceByLevel(defaultSatuan, tingkatHarga) : 0;
+          <>
+            {/* Header kolom list */}
+            <div className="sticky top-0 z-10 hidden items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 sm:flex">
+              <span className="min-w-0 flex-1">Produk</span>
+              <span className="w-28 text-right">Harga</span>
+              <span className="w-20 text-right">Stok</span>
+              <span className="w-8" />
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {products.map((produk) => {
+                const defaultSatuan =
+                  produk.produkSatuan?.find((s) => s.isDefault) || produk.produkSatuan?.[0];
+                const harga = defaultSatuan ? getPriceByLevel(defaultSatuan, tingkatHarga) : 0;
+                const satuanNama = defaultSatuan?.namaSatuan || produk.satuanDasar;
 
-              return (
-                <button
-                  key={produk.id}
-                  type="button"
-                  onClick={() => handleSelectProduct(produk)}
-                  className="flex flex-col p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-primary hover:shadow-sm transition-all text-left group"
-                >
-                  {/* Product Image Placeholder */}
-                  <div className="w-full aspect-square bg-gray-200 rounded-md mb-2 flex items-center justify-center">
-                    <Package className="h-8 w-8 text-gray-400" />
-                  </div>
+                const stockRow = cabangId
+                  ? produk.stok?.find((s) => s.cabangId === cabangId)
+                  : produk.stok?.[0];
+                const stokTotal = stockRow ? Number(stockRow.jumlah) : undefined;
+                const konversi = defaultSatuan ? Number(defaultSatuan.konversi) || 1 : 1;
+                const stokSatuan =
+                  stokTotal === undefined ? undefined : Math.floor(stokTotal / konversi);
+                const inCart = getStockInfo ? getStockInfo(produk).inCart : 0;
+                const remaining = stokSatuan === undefined ? undefined : stokSatuan - inCart;
+                const isOut = remaining !== undefined && remaining <= 0;
+                const isLow = remaining !== undefined && !isOut && remaining <= 5;
 
-                  {/* Product Name */}
-                  <h4 className="text-sm font-medium text-gray-900 line-clamp-2 group-hover:text-primary">
-                    {produk.nama}
-                  </h4>
+                return (
+                  <li key={produk.id}>
+                    <button
+                      type="button"
+                      onClick={() => !isOut && handleSelectProduct(produk)}
+                      disabled={isOut}
+                      title={isOut ? 'Stok habis' : `Tambah ${produk.nama}`}
+                      className={cn(
+                        'group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors',
+                        isOut
+                          ? 'cursor-not-allowed bg-gray-50 opacity-60'
+                          : 'hover:bg-primary/5 active:bg-primary/10'
+                      )}
+                    >
+                      {/* Nama + barcode + info satuan */}
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={cn(
+                            'truncate text-sm font-semibold',
+                            isOut ? 'text-gray-500' : 'text-gray-900 group-hover:text-primary'
+                          )}
+                        >
+                          {produk.nama}
+                        </p>
+                        <p className="truncate text-xs text-gray-400">
+                          {produk.barcode ? (
+                            <span className="font-mono">{produk.barcode}</span>
+                          ) : (
+                            <span>Tanpa barcode</span>
+                          )}
+                          {produk.produkSatuan && produk.produkSatuan.length > 1 && (
+                            <span> · +{produk.produkSatuan.length - 1} satuan</span>
+                          )}
+                        </p>
+                      </div>
 
-                  {/* Price */}
-                  <p className="text-sm font-semibold text-primary mt-1 tabular-nums">
-                    {formatRupiah(harga)}
-                  </p>
+                      {/* Harga */}
+                      <div className="w-28 shrink-0 text-right">
+                        <p
+                          className={cn(
+                            'text-sm font-bold tabular-nums',
+                            isOut ? 'text-gray-500' : 'text-primary'
+                          )}
+                        >
+                          {formatRupiah(harga)}
+                        </p>
+                        <p className="text-[11px] text-gray-400">per {satuanNama}</p>
+                      </div>
 
-                  {/* Unit */}
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    per {defaultSatuan?.namaSatuan || produk.satuanDasar}
-                  </p>
+                      {/* Stok */}
+                      <div className="w-20 shrink-0 text-right">
+                        {stokSatuan === undefined ? (
+                          <span className="text-xs text-gray-300">-</span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'inline-block rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums',
+                              isOut
+                                ? 'bg-red-50 text-red-600'
+                                : isLow
+                                  ? 'bg-amber-50 text-amber-600'
+                                  : 'bg-green-50 text-green-700'
+                            )}
+                          >
+                            {isOut ? 'Habis' : stokSatuan}
+                          </span>
+                        )}
+                      </div>
 
-                  {/* Multiple units indicator */}
-                  {produk.produkSatuan && produk.produkSatuan.length > 1 && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      +{produk.produkSatuan.length - 1} satuan lain
-                    </p>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                      {/* Tombol tambah */}
+                      <span
+                        className={cn(
+                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border',
+                          isOut
+                            ? 'border-gray-200 text-gray-300'
+                            : 'border-primary/30 text-primary group-hover:bg-primary group-hover:text-white'
+                        )}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
     </div>
