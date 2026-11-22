@@ -80,19 +80,19 @@ export async function GET(request: NextRequest) {
 
     // Calculate summary
     const summary = {
-      totalPenjualan: transactions.reduce((sum, t) => sum + t.total, 0),
+      totalPenjualan: transactions.reduce((sum, t) => sum + Number(t.total), 0),
       totalTransaksi: transactions.length,
       totalLaba: transactions.reduce(
-        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + d.laba, 0),
+        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + Number(d.laba), 0),
         0
       ),
       totalItem: transactions.reduce(
-        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + d.jumlah, 0),
+        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + Number(d.jumlah), 0),
         0
       ),
-      totalDiskon: transactions.reduce((sum, t) => sum + t.diskon, 0),
+      totalDiskon: transactions.reduce((sum, t) => sum + Number(t.diskon), 0),
       rataRataPerTransaksi: transactions.length > 0
-        ? transactions.reduce((sum, t) => sum + t.total, 0) / transactions.length
+        ? transactions.reduce((sum, t) => sum + Number(t.total), 0) / transactions.length
         : 0,
     };
 
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
         byPaymentMethod[t.metodeBayar] = { count: 0, total: 0 };
       }
       byPaymentMethod[t.metodeBayar].count++;
-      byPaymentMethod[t.metodeBayar].total += t.total;
+      byPaymentMethod[t.metodeBayar].total += Number(t.total);
     });
 
     // Group by date for chart
@@ -113,8 +113,8 @@ export async function GET(request: NextRequest) {
       if (!byDate[dateKey]) {
         byDate[dateKey] = { date: dateKey, penjualan: 0, laba: 0, transaksi: 0 };
       }
-      byDate[dateKey].penjualan += t.total;
-      byDate[dateKey].laba += t.detailTransaksi.reduce((s, d) => s + d.laba, 0);
+      byDate[dateKey].penjualan += Number(t.total);
+      byDate[dateKey].laba += t.detailTransaksi.reduce((s, d) => s + Number(d.laba), 0);
       byDate[dateKey].transaksi++;
     });
 
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
       subtotal: t.subtotal,
       diskon: t.diskon,
       total: t.total,
-      laba: t.detailTransaksi.reduce((s, d) => s + d.laba, 0),
+      laba: t.detailTransaksi.reduce((s, d) => s + Number(d.laba), 0),
       itemCount: t.detailTransaksi.length,
     }));
 

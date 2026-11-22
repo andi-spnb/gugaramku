@@ -102,10 +102,10 @@ export async function GET(request: NextRequest) {
       }
 
       // Convert to base unit
-      const qtyInBaseUnit = d.jumlah * d.konversi;
+      const qtyInBaseUnit = Number(d.jumlah) * Number(d.konversi);
       productMap[d.produkId].totalTerjual += qtyInBaseUnit;
-      productMap[d.produkId].totalPendapatan += d.subtotal;
-      productMap[d.produkId].totalLaba += d.laba;
+      productMap[d.produkId].totalPendapatan += Number(d.subtotal);
+      productMap[d.produkId].totalLaba += Number(d.laba);
       productMap[d.produkId].transaksiCount++;
     });
 

@@ -5,13 +5,41 @@
 
 ## ⛔ SEBELUM MEMULAI — BLOKRIR GO-LIVE
 
-**Jangan deploy ke production sebelum 7 temuan KRITIS di `docs/LAPORAN_AUDIT_2026-11-23.md` diperbaiki.** Yang paling memblokir proses deploy ini secara teknis:
+**Jangan deploy ke production sebelum sisa temuan KRITIS di `docs/LAPORAN_AUDIT_2026-11-23.md` diperbaiki.** Yang masih memblokir:
 
-1. **K4**: Prisma masih `provider = "sqlite"` dan belum ada folder `migrations/`. Langkah 5 di bawah TIDAK AKAN bekerja sebelum ini diperbaiki.
-2. **K5**: JANGAN PERNAH jalankan `prisma db seed` di production — seed membuat dan me-reset akun owner dengan password `owner123` yang diketahui publik.
-3. **K7**: Next.js 14.2.35 punya 3 advisory critical yang belum dipatch. Minimal hapus wildcard `images.remotePatterns` di `next.config.js` sebelum expose ke internet.
+1. **K7**: Next.js 14.2.35 punya advisory critical yang belum dipatch. Minimal hapus wildcard `images.remotePatterns` di `next.config.js` sebelum expose ke internet.
 
-Prasyarat perbaikan kode, lalu ikuti panduan ini.
+Sudah diperbaiki (batch 1 & 2, 2026-11-23): K1 (laba), K2 (quick sale), K3 (idempotency offline), K4 (PostgreSQL + migrations), K5 (guard seed + create-owner), T1, T2, T3, T8 (Decimal).
+
+---
+
+## 0. Development lokal (PostgreSQL)
+
+Aplikasi dan test integrasi butuh PostgreSQL berjalan. Cara tercepat dengan Docker:
+
+```bash
+docker run -d --name gugaramku-pg \
+  -e POSTGRES_PASSWORD=gugaramku -e POSTGRES_USER=gugaramku \
+  -p 5432:5432 postgres:16-alpine
+```
+
+Isi `.env` (salin dari `.env.example` lalu sesuaikan):
+
+```env
+DATABASE_URL="postgresql://gugaramku:gugaramku@localhost:5432/gugaramku_dev"
+```
+
+Perintah harian:
+
+```bash
+npm run db:migrate        # buat/menerapkan migrasi saat schema berubah (dev)
+npm run db:seed           # data demo — HANYA untuk development
+npm run create-owner      # buat akun owner (dev maupun production)
+npm run test:unit          # test integrasi: DB test otomatis <nama>_test
+```
+
+> Test integrasi menurunkan URL test dari `DATABASE_URL` di `.env` (nama database
+> diganti `<nama>_test`) dan menjalankan `prisma db push` ke sana — data dev aman.
 
 ---
 
@@ -109,11 +137,11 @@ Build & migrasi:
 ```bash
 npm ci
 npx prisma generate
-npx prisma migrate deploy   # butuh folder prisma/migrations/ (lihat blokir K4)
+npx prisma migrate deploy   # menerapkan prisma/migrations/ ke database
 npm run build
 ```
 
-> **PERINGATAN**: jangan jalankan `prisma db seed` dan jangan jalankan `prisma db push` di production. Akun owner pertama dibuat manual (lihat langkah 8).
+> **PERINGATAN**: jangan jalankan `prisma db seed` di production — seed demo diblokir otomatis saat `NODE_ENV=production` (kredensial demo diketahui publik), dan jangan jalankan `prisma db push` di production. Akun owner pertama dibuat lewat `npm run create-owner` (lihat langkah 8).
 
 ## 6. Jalankan dengan PM2
 
@@ -183,15 +211,15 @@ Setelah aplikasi jalan, buat akun owner dengan password acak:
 
 ```bash
 cd /home/deploy/gugaramku
-node -e "
-const bcrypt = require('bcryptjs');
-const pass = require('crypto').randomBytes(12).toString('base64url');
-console.log('Password owner:', pass);
-require('@prisma/client');
-"
+npm run create-owner
 ```
 
-Atau lebih mudah: buat akun lewat skrip one-off `scripts/create-owner.ts` (perlu dibuat) yang menerima email + password dari prompt dan langsung meng-hash bcrypt. **Jangan pernah memakai `owner123`.**
+Ikuti prompt (email, nama, kode cabang). Script akan:
+- membuat cabang + saldo kas awal Rp 0 bila cabang belum ada,
+- membuat user `OWNER` dengan password & PIN acak,
+- menampilkan kredensial **sekali saja** di terminal — simpan ke password manager segera.
+
+**Jangan pernah memakai seed demo / `owner123`.**
 
 ## 9. Backup otomatis (WAJIB sebelum go-live)
 
@@ -218,12 +246,12 @@ chmod +x scripts/backup.sh
 
 ## 10. Checklist go-live
 
-- [ ] Semua temuan KRITIS di `docs/LAPORAN_AUDIT_2026-11-23.md` statusnya "fix"
-- [ ] `prisma/schema.prisma` sudah `provider = "postgresql"` + folder `migrations/` ter-commit
+- [ ] Sisa temuan KRITIS di `docs/LAPORAN_AUDIT_2026-11-23.md` statusnya "fix" (K7 dst.)
+- [x] `prisma/schema.prisma` `provider = "postgresql"` + folder `migrations/` ter-commit
 - [ ] `npm audit` tidak menyisa temuan critical/high di dependencies production
 - [ ] `AUTH_SECRET` produksi baru (belum pernah dipakai di mana pun)
 - [ ] `AUTH_URL` & `NEXT_PUBLIC_APP_URL` menunjuk domain produksi (lalu build ulang)
-- [ ] Seed TIDAK dijalankan; akun owner dengan password acak sudah dibuat & tes login
+- [x] Seed diblokir di production (`NODE_ENV=production`); owner dibuat via `npm run create-owner`
 - [ ] HTTPS aktif (certbot) dan redirect 80 → 443
 - [ ] Backup harian jalan + restore sudah diuji
 - [ ] Firewall: hanya 22/80/443; 3000/5432 tertutup dari luar

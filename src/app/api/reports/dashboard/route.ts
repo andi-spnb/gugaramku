@@ -63,24 +63,24 @@ export async function GET(request: NextRequest) {
 
     // Calculate today's stats
     const todayStats = {
-      totalPenjualan: todayTransactions.reduce((sum, t) => sum + t.total, 0),
+      totalPenjualan: todayTransactions.reduce((sum, t) => sum + Number(t.total), 0),
       totalTransaksi: todayTransactions.length,
       totalLaba: todayTransactions.reduce(
-        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + d.laba, 0),
+        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + Number(d.laba), 0),
         0
       ),
       totalItem: todayTransactions.reduce(
-        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + d.jumlah, 0),
+        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + Number(d.jumlah), 0),
         0
       ),
     };
 
     // Calculate yesterday's stats for comparison
     const yesterdayStats = {
-      totalPenjualan: yesterdayTransactions.reduce((sum, t) => sum + t.total, 0),
+      totalPenjualan: yesterdayTransactions.reduce((sum, t) => sum + Number(t.total), 0),
       totalTransaksi: yesterdayTransactions.length,
       totalLaba: yesterdayTransactions.reduce(
-        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + d.laba, 0),
+        (sum, t) => sum + t.detailTransaksi.reduce((s, d) => s + Number(d.laba), 0),
         0
       ),
     };
@@ -112,8 +112,8 @@ export async function GET(request: NextRequest) {
     let emptyStockCount = 0;
     products.forEach((p) => {
       const stok = p.stok[0];
-      const jumlah = stok?.jumlah || 0;
-      const minimum = stok?.stokMinimum || 0;
+      const jumlah = Number(stok?.jumlah || 0);
+      const minimum = Number(stok?.stokMinimum || 0);
       if (jumlah <= 0) {
         emptyStockCount++;
       } else if (jumlah <= minimum) {

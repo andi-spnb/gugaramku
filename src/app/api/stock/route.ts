@@ -62,8 +62,8 @@ export async function GET(request: NextRequest) {
     // Transform and filter by status
     let stockList = products.map((p) => {
       const stok = p.stok[0];
-      const jumlah = stok?.jumlah || 0;
-      const stokMinimum = stok?.stokMinimum || 0;
+      const jumlah = Number(stok?.jumlah || 0);
+      const stokMinimum = Number(stok?.stokMinimum || 0);
       
       let stockStatus: 'normal' | 'low' | 'empty' = 'normal';
       if (jumlah <= 0) {

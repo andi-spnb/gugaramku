@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
       const returnedQty: Record<string, number> = {};
       t.retur.forEach((r) => {
         r.detail.forEach((d) => {
-          returnedQty[d.detailTransaksiId] = (returnedQty[d.detailTransaksiId] || 0) + d.jumlah;
+          returnedQty[d.detailTransaksiId] = (returnedQty[d.detailTransaksiId] || 0) + Number(d.jumlah);
         });
       });
 
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
         metodeBayar: t.metodeBayar,
         items: t.detailTransaksi.map((d) => {
           const alreadyReturned = returnedQty[d.id] || 0;
-          const returnable = d.jumlah - alreadyReturned;
+          const returnable = Number(d.jumlah) - alreadyReturned;
           return {
             id: d.id,
             produkId: d.produkId,
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
         }),
         hasReturnableItems: t.detailTransaksi.some((d) => {
           const alreadyReturned = returnedQty[d.id] || 0;
-          return d.jumlah - alreadyReturned > 0;
+          return Number(d.jumlah) - alreadyReturned > 0;
         }),
       };
     });

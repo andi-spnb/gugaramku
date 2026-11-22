@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const saldoSebelum = kas.saldo;
+      const saldoSebelum = Number(kas.saldo);
       const saldoSesudah = saldoSebelum + nominal;
 
       return [

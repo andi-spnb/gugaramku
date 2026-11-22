@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      if (item.jumlah <= 0 || item.jumlah > detail.jumlah) {
+      if (item.jumlah <= 0 || item.jumlah > Number(detail.jumlah)) {
         return NextResponse.json({
           success: false,
           error: { code: 'VALIDATION_ERROR', message: `Jumlah retur tidak valid untuk ${detail.namaBarang}` },
@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
         jumlah: item.jumlah,
         nilaiRefund,
         produkId: detail.produkId,
-        konversi: detail.konversi,
+        konversi: Number(detail.konversi),
       });
     }
 
@@ -358,7 +358,7 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          const currentQty = existingStock?.jumlah || 0;
+          const currentQty = Number(existingStock?.jumlah || 0);
           const newQty = currentQty + qtyInBaseUnit;
 
           // Upsert stock
@@ -432,7 +432,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        const saldoSebelum = kas.saldo;
+        const saldoSebelum = Number(kas.saldo);
         const saldoSesudah = saldoSebelum - refundKas;
 
         // Tolak refund tunai yang membuat saldo kas negatif

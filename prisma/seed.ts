@@ -4,6 +4,16 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  // K5 (audit): seed ini berisi kredensial demo yang diketahui publik.
+  // Jangan pernah dijalankan di production — siapa pun bisa login sebagai owner.
+  // Untuk membuat akun owner pertama di production: `npm run create-owner`.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('⛔ Seed demo diblokir: NODE_ENV=production.');
+    console.error('   Kredensial demo diketahui publik dan membuka akses owner.');
+    console.error('   Gunakan `npm run create-owner` untuk membuat akun owner pertama.');
+    process.exit(1);
+  }
+
   console.log('🌱 Seeding database...');
 
   // Hash passwords & PINs
