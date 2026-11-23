@@ -3,15 +3,9 @@ const nextConfig = {
   // Aktifkan strict mode untuk React
   reactStrictMode: true,
 
-  // Konfigurasi gambar
+  // Konfigurasi gambar (semua gambar lokal di public/; gambar QRIS dari
+  // pengaturan memakai unoptimized sehingga tidak perlu remotePatterns)
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**.gugaramku.com',
-      },
-    ],
-    // Format gambar yang didukung
     formats: ['image/avif', 'image/webp'],
   },
 

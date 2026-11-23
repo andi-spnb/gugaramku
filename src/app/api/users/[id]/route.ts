@@ -12,13 +12,14 @@ export const dynamic = 'force-dynamic';
 // GET /api/users/[id] - Get user by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         cabang: {
           select: {
@@ -74,8 +75,9 @@ export async function GET(
 // PUT /api/users/[id] - Update user
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
@@ -88,7 +90,7 @@ export async function PUT(
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingUser) {
@@ -126,7 +128,7 @@ export async function PUT(
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const user = await prisma.user.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       include: {
         cabang: {
@@ -143,7 +145,7 @@ export async function PUT(
       userId: authResult.user.id,
       aksi: 'USER_UPDATE',
       tabel: 'user',
-      recordId: params.id,
+      recordId: id,
       dataBaru: { nama, email, role, cabangId, isActive },
       request,
     });
@@ -185,14 +187,15 @@ export async function PUT(
 // DELETE /api/users/[id] - Delete user (soft delete by setting isActive = false)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingUser) {
@@ -212,7 +215,7 @@ export async function DELETE(
 
     // Soft delete
     await prisma.user.update({
-      where: { id: params.id },
+      where: { id: id },
       data: { isActive: false },
     });
 
@@ -220,7 +223,7 @@ export async function DELETE(
       userId: authResult.user.id,
       aksi: 'USER_DELETE',
       tabel: 'user',
-      recordId: params.id,
+      recordId: id,
       request,
     });
 

@@ -10,13 +10,14 @@ export const dynamic = 'force-dynamic';
 // GET /api/customers/[id]
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth();
     if (!authResult.ok) return authResult.response;
   try {
     const customer = await prisma.pelanggan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         hutang: {
           where: { status: 'BELUM_LUNAS' },
@@ -60,8 +61,9 @@ export async function GET(
 // PUT /api/customers/[id]
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
@@ -71,7 +73,7 @@ export async function PUT(
     if (!parsed.ok) return parsed.response;
 
     const existing = await prisma.pelanggan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existing) {
@@ -86,7 +88,7 @@ export async function PUT(
     }
 
     const customer = await prisma.pelanggan.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         nama: parsed.data.nama?.trim() ?? existing.nama,
         telepon: parsed.data.telepon?.trim() || null,
@@ -123,13 +125,14 @@ export async function PUT(
 // DELETE /api/customers/[id]
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     const existing = await prisma.pelanggan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         transaksi: { take: 1 },
         hutang: { where: { status: 'BELUM_LUNAS' }, take: 1 },
@@ -162,7 +165,7 @@ export async function DELETE(
     // Soft delete if has transactions
     if (existing.transaksi.length > 0) {
       await prisma.pelanggan.update({
-        where: { id: params.id },
+        where: { id: id },
         data: { isActive: false },
       });
 
@@ -175,7 +178,7 @@ export async function DELETE(
 
     // Hard delete
     await prisma.pelanggan.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     const response: ApiResponse<null> = {

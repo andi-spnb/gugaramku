@@ -10,13 +10,14 @@ export const dynamic = 'force-dynamic';
 // GET /api/categories/[id] - Get single category
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth();
     if (!authResult.ok) return authResult.response;
   try {
     const category = await prisma.kategori.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!category) {
@@ -62,8 +63,9 @@ export async function GET(
 // PUT /api/categories/[id] - Update category
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
@@ -74,7 +76,7 @@ export async function PUT(
 
     // Check if category exists
     const existing = await prisma.kategori.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existing) {
@@ -93,7 +95,7 @@ export async function PUT(
       const nameExists = await prisma.kategori.findFirst({
         where: {
           nama: parsed.data.nama,
-          id: { not: params.id },
+          id: { not: id },
         },
       });
 
@@ -110,7 +112,7 @@ export async function PUT(
     }
 
     const category = await prisma.kategori.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         nama: parsed.data.nama?.trim() ?? existing.nama,
         deskripsi: parsed.data.deskripsi?.trim() || null,
@@ -152,14 +154,15 @@ export async function PUT(
 // DELETE /api/categories/[id] - Delete category
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     // Check if category exists
     const existing = await prisma.kategori.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         produk: { take: 1 },
       },
@@ -189,7 +192,7 @@ export async function DELETE(
     }
 
     await prisma.kategori.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     const response: ApiResponse<null> = {

@@ -12,8 +12,9 @@ export const dynamic = 'force-dynamic';
 // POST /api/users/[id]/reset-password - Reset user password
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
@@ -26,7 +27,7 @@ export async function POST(
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingUser) {
@@ -41,7 +42,7 @@ export async function POST(
 
     // Update password
     await prisma.user.update({
-      where: { id: params.id },
+      where: { id: id },
       data: { password: hashedPassword },
     });
 
@@ -49,8 +50,8 @@ export async function POST(
       userId: authResult.user.id,
       aksi: 'PASSWORD_RESET',
       tabel: 'user',
-      recordId: params.id,
-      dataBaru: { userId: params.id },
+      recordId: id,
+      dataBaru: { userId: id },
       request,
     });
 

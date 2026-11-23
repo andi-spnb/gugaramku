@@ -10,13 +10,14 @@ export const dynamic = 'force-dynamic';
 // GET /api/products/[id] - Get single product
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth();
     if (!authResult.ok) return authResult.response;
   try {
     const product = await prisma.produk.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         kategori: true,
         produkSatuan: {
@@ -105,8 +106,9 @@ export async function GET(
 // PUT /api/products/[id] - Update product
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
@@ -121,7 +123,7 @@ export async function PUT(
 
     // Check if product exists
     const existing = await prisma.produk.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existing) {
@@ -140,7 +142,7 @@ export async function PUT(
       const barcodeExists = await prisma.produk.findFirst({
         where: { 
           barcode: body.barcode,
-          id: { not: params.id },
+          id: { not: id },
         },
       });
       
@@ -160,7 +162,7 @@ export async function PUT(
     const result = await prisma.$transaction(async (tx) => {
       // Update product
       const produk = await tx.produk.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           barcode: barcode || null,
           nama,
@@ -174,7 +176,7 @@ export async function PUT(
 
       // Delete existing satuan
       await tx.produkSatuan.deleteMany({
-        where: { produkId: params.id },
+        where: { produkId: id },
       });
 
       // Create new satuan
@@ -278,14 +280,15 @@ export async function PUT(
 // DELETE /api/products/[id] - Delete product
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER', 'ADMIN_CABANG']);
     if (!authResult.ok) return authResult.response;
   try {
     // Check if product exists
     const existing = await prisma.produk.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         detailTransaksi: { take: 1 },
       },
@@ -306,7 +309,7 @@ export async function DELETE(
     if (existing.detailTransaksi.length > 0) {
       // Soft delete - just mark as inactive
       await prisma.produk.update({
-        where: { id: params.id },
+        where: { id: id },
         data: { isActive: false },
       });
 
@@ -319,10 +322,10 @@ export async function DELETE(
 
     // Hard delete - remove product and related data
     await prisma.$transaction(async (tx) => {
-      await tx.stokMutasi.deleteMany({ where: { produkId: params.id } });
-      await tx.stok.deleteMany({ where: { produkId: params.id } });
-      await tx.produkSatuan.deleteMany({ where: { produkId: params.id } });
-      await tx.produk.delete({ where: { id: params.id } });
+      await tx.stokMutasi.deleteMany({ where: { produkId: id } });
+      await tx.stok.deleteMany({ where: { produkId: id } });
+      await tx.produkSatuan.deleteMany({ where: { produkId: id } });
+      await tx.produk.delete({ where: { id: id } });
     });
 
     const response: ApiResponse<null> = {

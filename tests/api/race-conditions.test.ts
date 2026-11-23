@@ -316,7 +316,7 @@ describe('POST /api/debts/[id]/pay - guard cabang (T4)', () => {
     const { f, hutang } = await seedHutang(`t4a-${++seq}-${Date.now()}`);
     mockUser({ id: f.kasir.id, role: 'KASIR', cabangId: null });
 
-    const res = await json(await payDebtPOST(post({ jumlah: 50000 }), { params: { id: hutang.id } }));
+    const res = await json(await payDebtPOST(post({ jumlah: 50000 }), { params: Promise.resolve({ id: hutang.id }) }));
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('FORBIDDEN');
     // Hutang tidak berubah
@@ -327,7 +327,7 @@ describe('POST /api/debts/[id]/pay - guard cabang (T4)', () => {
     const { f, hutang } = await seedHutang(`t4b-${++seq}-${Date.now()}`);
     mockUser({ id: f.kasir.id, role: 'KASIR', cabangId: f.cabangLain.id });
 
-    const res = await json(await payDebtPOST(post({ jumlah: 50000 }), { params: { id: hutang.id } }));
+    const res = await json(await payDebtPOST(post({ jumlah: 50000 }), { params: Promise.resolve({ id: hutang.id }) }));
     expect(res.status).toBe(403);
   });
 
@@ -336,8 +336,8 @@ describe('POST /api/debts/[id]/pay - guard cabang (T4)', () => {
     mockUser({ id: f.kasir.id, role: 'KASIR', cabangId: f.cabang.id });
 
     const [r1, r2] = await Promise.all([
-      json(await payDebtPOST(post({ jumlah: 60000 }), { params: { id: hutang.id } })),
-      json(await payDebtPOST(post({ jumlah: 20000 }), { params: { id: hutang.id } })),
+      json(await payDebtPOST(post({ jumlah: 60000 }), { params: Promise.resolve({ id: hutang.id }) })),
+      json(await payDebtPOST(post({ jumlah: 20000 }), { params: Promise.resolve({ id: hutang.id }) })),
     ]);
 
     expect(r1.status).toBe(200);
@@ -384,7 +384,7 @@ describe('DELETE /api/transactions/hold/[id] - guard cabang (T4)', () => {
     const { f, hold } = await seedHold(`t4d-${++seq}-${Date.now()}`);
     mockUser({ id: f.kasir.id, role: 'KASIR', cabangId: null });
 
-    const res = await json(await deleteHoldPOST(del(), { params: { id: hold.id } }));
+    const res = await json(await deleteHoldPOST(del(), { params: Promise.resolve({ id: hold.id }) }));
     expect(res.status).toBe(403);
     expect(await prisma.transaksi.count({ where: { id: hold.id } })).toBe(1);
   });
@@ -393,7 +393,7 @@ describe('DELETE /api/transactions/hold/[id] - guard cabang (T4)', () => {
     const { f, hold } = await seedHold(`t4e-${++seq}-${Date.now()}`);
     mockUser({ id: f.kasir.id, role: 'KASIR', cabangId: f.cabangLain.id });
 
-    const res = await json(await deleteHoldPOST(del(), { params: { id: hold.id } }));
+    const res = await json(await deleteHoldPOST(del(), { params: Promise.resolve({ id: hold.id }) }));
     expect(res.status).toBe(403);
     expect(await prisma.transaksi.count({ where: { id: hold.id } })).toBe(1);
   });
@@ -402,7 +402,7 @@ describe('DELETE /api/transactions/hold/[id] - guard cabang (T4)', () => {
     const { f, hold } = await seedHold(`t4f-${++seq}-${Date.now()}`);
     mockUser({ id: f.kasir.id, role: 'KASIR', cabangId: f.cabang.id });
 
-    const res = await json(await deleteHoldPOST(del(), { params: { id: hold.id } }));
+    const res = await json(await deleteHoldPOST(del(), { params: Promise.resolve({ id: hold.id }) }));
     expect(res.status).toBe(200);
     expect(await prisma.transaksi.count({ where: { id: hold.id } })).toBe(0);
   });

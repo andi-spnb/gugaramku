@@ -694,8 +694,8 @@ describe('POST /api/debts/[id]/pay - overpayment (T3)', () => {
     const { hutang } = await seedHutang(100000);
 
     const [r1, r2] = await Promise.all([
-      payDebtPOST(post({ jumlah: 60000, metode: 'TUNAI' }), { params: { id: hutang.id } }),
-      payDebtPOST(post({ jumlah: 60000, metode: 'TUNAI' }), { params: { id: hutang.id } }),
+      payDebtPOST(post({ jumlah: 60000, metode: 'TUNAI' }), { params: Promise.resolve({ id: hutang.id }) }),
+      payDebtPOST(post({ jumlah: 60000, metode: 'TUNAI' }), { params: Promise.resolve({ id: hutang.id }) }),
     ]);
 
     const statuses = [r1.status, r2.status].sort();
@@ -710,17 +710,17 @@ describe('POST /api/debts/[id]/pay - overpayment (T3)', () => {
   it('pembayaran parsial bertahap sampai lunas', async () => {
     const { hutang } = await seedHutang(100000);
 
-    const r1 = await json(await payDebtPOST(post({ jumlah: 60000 }), { params: { id: hutang.id } }));
+    const r1 = await json(await payDebtPOST(post({ jumlah: 60000 }), { params: Promise.resolve({ id: hutang.id }) }));
     expect(r1.status).toBe(200);
     expect(r1.body.data.hutang.sisa).toBe(40000);
 
-    const r2 = await json(await payDebtPOST(post({ jumlah: 40000 }), { params: { id: hutang.id } }));
+    const r2 = await json(await payDebtPOST(post({ jumlah: 40000 }), { params: Promise.resolve({ id: hutang.id }) }));
     expect(r2.status).toBe(200);
     expect(Number(r2.body.data.hutang.sisa)).toBe(0);
     expect(r2.body.data.hutang.status).toBe('LUNAS');
 
     // Bayar lagi setelah lunas -> ditolak
-    const r3 = await json(await payDebtPOST(post({ jumlah: 5000 }), { params: { id: hutang.id } }));
+    const r3 = await json(await payDebtPOST(post({ jumlah: 5000 }), { params: Promise.resolve({ id: hutang.id }) }));
     expect(r3.status).toBe(400);
     expect(r3.body.error.code).toBe('ALREADY_PAID');
   });
@@ -728,7 +728,7 @@ describe('POST /api/debts/[id]/pay - overpayment (T3)', () => {
   it('pembayaran melebihi sisa ditolak', async () => {
     const { hutang } = await seedHutang(100000);
 
-    const r1 = await json(await payDebtPOST(post({ jumlah: 150000 }), { params: { id: hutang.id } }));
+    const r1 = await json(await payDebtPOST(post({ jumlah: 150000 }), { params: Promise.resolve({ id: hutang.id }) }));
     expect(r1.status).toBe(400);
     expect(r1.body.error.code).toBe('OVERPAYMENT');
     expect(Number((await prisma.hutang.findUniqueOrThrow({ where: { id: hutang.id } })).sisa)).toBe(100000);

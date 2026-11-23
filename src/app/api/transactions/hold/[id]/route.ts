@@ -9,13 +9,13 @@ export const dynamic = 'force-dynamic';
 // DELETE /api/transactions/hold/[id] - Hapus (batalkan) transaksi tertahan
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const authResult = await requireAuth();
   if (!authResult.ok) return authResult.response;
 
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Pastikan transaksi ada dan berstatus HOLD
     const transaksi = await prisma.transaksi.findUnique({
@@ -65,7 +65,7 @@ export async function DELETE(
       userId: authResult.user.id,
       aksi: 'HOLD_DELETE',
       tabel: 'transaksi',
-      recordId: params.id,
+      recordId: id,
       request,
     });
 

@@ -3,13 +3,13 @@
 > Target: 1 VPS Ubuntu 24.04 LTS, PostgreSQL 16, Nginx + SSL, PM2.
 > Arsitektur mengikuti `docs/SYSTEM_ARCHITECTURE.md`.
 
-## ⛔ SEBELUM MEMULAI — BLOKRIR GO-LIVE
+## ✅ GO-LIVE READY — semua temuan KRITIS sudah diperbaiki
 
-**Jangan deploy ke production sebelum sisa temuan KRITIS di `docs/LAPORAN_AUDIT_2026-11-23.md` diperbaiki.** Yang masih memblokir:
+Semua temuan KRITIS (K1-K7) dan TINGGI (T1-T8) di `docs/LAPORAN_AUDIT_2026-11-23.md` sudah diperbaiki dan terverifikasi (batch 1-4, 2026-11-23). `npm audit` bersih: **0 vulnerabilities**.
 
-1. **K7**: Next.js 14.2.35 punya advisory critical yang belum dipatch. Minimal hapus wildcard `images.remotePatterns` di `next.config.js` sebelum expose ke internet.
+Ringkasan batch 4 (K7): Next.js 14.2.35 → **16.4.6** (React 19, Turbopack), hapus wildcard `images.remotePatterns`, zod 4.6.7, vitest 5.1.1, ESLint 9 + flat config, `middleware.ts` → `proxy.ts`. Verifikasi: 102/102 test, tsc, lint, build, smoke test (login 200, redirect auth 307, API guard 401).
 
-Sudah diperbaiki (batch 1-3, 2026-11-23): K1 (laba), K2 (quick sale), K3 (idempotency offline), K4 (PostgreSQL + migrations), K5 (guard seed + create-owner), K6 (kas atomik), T1, T2, T3, T4 (guard cabang), T5 (adjustment race), T7 (nomor retry), T8 (Decimal).
+Sisa temuan SEDANG/RENDAH (T9-T11, S1, S2, S13, T6) tidak memblokir go-live — lihat laporan audit.
 
 ---
 
@@ -77,8 +77,8 @@ ufw enable
 ## 3. Install runtime
 
 ```bash
-# Node.js 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node.js 22 LTS (Next.js 16 butuh >= 20.9)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 apt install -y nodejs
 
 # PostgreSQL 16

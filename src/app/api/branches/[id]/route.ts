@@ -11,13 +11,14 @@ export const dynamic = 'force-dynamic';
 // GET /api/branches/[id] - Get branch by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
     const branch = await prisma.cabang.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         _count: {
           select: {
@@ -80,8 +81,9 @@ export async function GET(
 // PUT /api/branches/[id] - Update branch
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
@@ -94,7 +96,7 @@ export async function PUT(
 
     // Check if branch exists
     const existingBranch = await prisma.cabang.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingBranch) {
@@ -128,7 +130,7 @@ export async function PUT(
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const branch = await prisma.cabang.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       include: {
         _count: {
@@ -149,7 +151,7 @@ export async function PUT(
       userId: authResult.user.id,
       aksi: 'BRANCH_UPDATE',
       tabel: 'cabang',
-      recordId: params.id,
+      recordId: id,
       dataBaru: { kode, nama, alamat, telepon, isActive },
       request,
     });
@@ -192,14 +194,15 @@ export async function PUT(
 // DELETE /api/branches/[id] - Delete branch (soft delete)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
     const authResult = await requireAuth(['OWNER']);
     if (!authResult.ok) return authResult.response;
   try {
     // Check if branch exists
     const existingBranch = await prisma.cabang.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         _count: {
           select: {
@@ -221,7 +224,7 @@ export async function DELETE(
     if (existingBranch._count.transaksi > 0) {
       // Soft delete - just deactivate
       await prisma.cabang.update({
-        where: { id: params.id },
+        where: { id: id },
         data: { isActive: false },
       });
 
@@ -229,7 +232,7 @@ export async function DELETE(
         userId: authResult.user.id,
         aksi: 'BRANCH_DELETE',
         tabel: 'cabang',
-        recordId: params.id,
+        recordId: id,
         request,
       });
 
@@ -242,14 +245,14 @@ export async function DELETE(
 
     // Hard delete if no transactions
     await prisma.cabang.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     await logActivity({
       userId: authResult.user.id,
       aksi: 'BRANCH_DELETE',
       tabel: 'cabang',
-      recordId: params.id,
+      recordId: id,
       request,
     });
 

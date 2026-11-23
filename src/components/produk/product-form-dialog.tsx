@@ -96,6 +96,28 @@ export function ProductFormDialog({ open, onClose, onSuccess, product }: Product
   const updateProductMutation = useUpdateProduct();
   const createCategoryMutation = useCreateCategory();
 
+  const resetForm = () => {
+    setBarcode('');
+    setNama('');
+    setKategoriId('');
+    setHargaModal(0);
+    setSatuanDasar('');
+    setStokAwal(0);
+    setStokMinimum(0);
+    setSatuan([
+      {
+        id: `new-${Date.now()}`,
+        namaSatuan: '',
+        konversi: 1,
+        harga1: 0,
+        harga2: 0,
+        harga3: 0,
+        harga4: 0,
+        isDefault: true,
+      },
+    ]);
+  };
+
   // Initialize form when product changes
   useEffect(() => {
     if (product) {
@@ -122,28 +144,6 @@ export function ProductFormDialog({ open, onClose, onSuccess, product }: Product
       resetForm();
     }
   }, [product, open]);
-
-  const resetForm = () => {
-    setBarcode('');
-    setNama('');
-    setKategoriId('');
-    setHargaModal(0);
-    setSatuanDasar('');
-    setStokAwal(0);
-    setStokMinimum(0);
-    setSatuan([
-      {
-        id: `new-${Date.now()}`,
-        namaSatuan: '',
-        konversi: 1,
-        harga1: 0,
-        harga2: 0,
-        harga3: 0,
-        harga4: 0,
-        isDefault: true,
-      },
-    ]);
-  };
 
   const handleAddSatuan = () => {
     setSatuan([

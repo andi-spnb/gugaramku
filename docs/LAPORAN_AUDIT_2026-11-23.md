@@ -25,7 +25,7 @@
 | K4 PostgreSQL + migrations | ✅ fix | provider postgresql, baseline `20261122232505_init`, migrate dev+deploy siap |
 | K5 guard seed + create-owner | ✅ fix | NODE_ENV=production → seed exit 1; `npm run create-owner` password acak |
 | K6 kas read-write race | ✅ fix | test: 3 penjualan bersamaan → saldo Rp10.500 & rantai mutasi konsisten |
-| K7 Next.js advisory | ⬜ belum | batch terakhir |
+| K7 Next.js advisory | ✅ fix | next 14.2.35 → 16.4.6, `npm audit` 0 vulnerabilities; remotePatterns wildcard dihapus |
 | T1 QRIS/TRANSFER lunas | ✅ fix | test: QRIS Rp0 ditolak |
 | T2 retur hutang | ✅ fix | test: refund dikredit ke hutang, kas utuh |
 | T3 race overpayment | ✅ fix | test: 2 bayar bersamaan → 1 sukses 1 ditolak |
@@ -140,7 +140,7 @@
 1. ~~**K1, K2, K3, T1, T2, T3**~~ — ✅ SELESAI (batch 1): +15 test integrasi (91 total pass).
 2. ~~**K4 + T8 + K5**~~ — ✅ SELESAI (batch 2): PostgreSQL + baseline migrasi `20261122232505_init`, Decimal(14,2)/Decimal(14,3), guard seed, `npm run create-owner`. Test integrasi kini jalan di PostgreSQL.
 3. ~~**K6, T4, T5, T7**~~ — ✅ SELESAI (batch 3): kas & adjustment pakai `increment/decrement` atomik, opname pakai optimistic lock, nomor transaksi retry P2002, guard `cabangId` null. +11 test integrasi (102 total pass).
-4. **K7** — upgrade Next.js + `npm audit fix` (uji penuh setelahnya).
+4. ~~**K7**~~ — ✅ SELESAI (batch 4): Next.js 14.2.35 → 16.4.6 (React 19, params async di 18 handler, `middleware` → `proxy`, ESLint 9 flat config), zod 3 → 4.6.7, vitest 2 → 5.1.1, hapus wildcard `images.remotePatterns`. `npm audit`: 17 (3 critical) → **0**.
 5. **T6, S1, S2, S13** — performa laporan & kebersihan API.
 6. **T9, T10** — Redis rate limit + backup cron (bisa jadi bagian setup VPS).
 7. Sisanya (SEDANG/RENDAH) setelah go-live stabil.

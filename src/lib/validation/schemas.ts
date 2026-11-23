@@ -16,11 +16,11 @@ const optionalText = (max: number) =>
     .nullish();
 
 const positiveNumber = z
-  .number({ invalid_type_error: 'Harus berupa angka' })
+  .number({ error: 'Harus berupa angka' })
   .positive('Harus lebih dari 0');
 
 const nonNegativeNumber = z
-  .number({ invalid_type_error: 'Harus berupa angka' })
+  .number({ error: 'Harus berupa angka' })
   .min(0, 'Tidak boleh negatif');
 
 // ===========================================
@@ -136,7 +136,7 @@ export const updateCustomerSchema = createCustomerSchema.partial();
 
 const produkSatuanSchema = z.object({
   namaSatuan: z.string().min(1, 'Nama satuan harus diisi').max(30),
-  konversi: z.number({ invalid_type_error: 'Konversi harus berupa angka' }).min(
+  konversi: z.number({ error: 'Konversi harus berupa angka' }).min(
     1,
     'Konversi minimal 1'
   ),
@@ -168,7 +168,7 @@ export const stockAdjustmentSchema = z.object({
   produkId: id,
   jumlah: positiveNumber,
   tipe: z.enum(['ADJUSTMENT_PLUS', 'ADJUSTMENT_MINUS', 'OPNAME', 'RUSAK', 'EXPIRED'], {
-    errorMap: () => ({ message: 'Tipe adjustment tidak valid' }),
+    error: 'Tipe adjustment tidak valid',
   }),
   keterangan: optionalText(500),
 });
@@ -200,10 +200,10 @@ export const debtPaySchema = z.object({
 export const createReturSchema = z.object({
   transaksiId: id,
   metodeRefund: z.enum(['TUNAI', 'TUKAR_BARANG'], {
-    errorMap: () => ({ message: 'Metode refund tidak valid' }),
+    error: 'Metode refund tidak valid',
   }),
   alasan: z.enum(['RUSAK', 'SALAH', 'EXPIRED', 'LAINNYA'], {
-    errorMap: () => ({ message: 'Alasan retur tidak valid' }),
+    error: 'Alasan retur tidak valid',
   }),
   catatan: optionalText(500),
   items: z
@@ -211,7 +211,7 @@ export const createReturSchema = z.object({
       z.object({
         detailTransaksiId: id,
         jumlah: z
-          .number({ invalid_type_error: 'Jumlah harus berupa angka' })
+          .number({ error: 'Jumlah harus berupa angka' })
           .int('Jumlah harus bilangan bulat')
           .positive('Jumlah harus lebih dari 0'),
       })
@@ -233,7 +233,7 @@ const transactionItemSchema = z
     jumlah: positiveNumber,
     satuan: z.string().min(1).max(50),
     konversi: z
-      .number({ invalid_type_error: 'Konversi harus berupa angka' })
+      .number({ error: 'Konversi harus berupa angka' })
       .min(1, 'Konversi minimal 1'),
     hargaModal: nonNegativeNumber,
     hargaJual: nonNegativeNumber,
@@ -266,12 +266,12 @@ export const createTransactionSchema = z.object({
   // membuat transaksi kedua dengan clientRef yang sama.
   clientRef: optionalText(64),
   tingkatHarga: z
-    .number({ invalid_type_error: 'Tingkat harga harus berupa angka' })
+    .number({ error: 'Tingkat harga harus berupa angka' })
     .int()
     .min(1, 'Tingkat harga 1-4')
     .max(4, 'Tingkat harga 1-4'),
   metodeBayar: z.enum(['TUNAI', 'QRIS', 'TRANSFER', 'HUTANG', 'SPLIT'], {
-    errorMap: () => ({ message: 'Metode pembayaran tidak valid' }),
+    error: 'Metode pembayaran tidak valid',
   }),
   jumlahBayar: nonNegativeNumber,
   catatan: optionalText(500),
@@ -284,7 +284,7 @@ export const createTransactionSchema = z.object({
 
 export const holdTransactionSchema = z.object({
   tingkatHarga: z
-    .number({ invalid_type_error: 'Tingkat harga harus berupa angka' })
+    .number({ error: 'Tingkat harga harus berupa angka' })
     .int()
     .min(1, 'Tingkat harga 1-4')
     .max(4, 'Tingkat harga 1-4'),
@@ -322,7 +322,7 @@ export const updateSettingsSchema = z.object({
   footerStruk: z.string().max(500).optional(),
   printerSize: z.enum(['58mm', '80mm']).optional(),
   autoLogoutMenit: z
-    .number({ invalid_type_error: 'Auto logout harus berupa angka' })
+    .number({ error: 'Auto logout harus berupa angka' })
     .int()
     .min(1, 'Minimal 1 menit')
     .max(1440, 'Maksimal 1440 menit')

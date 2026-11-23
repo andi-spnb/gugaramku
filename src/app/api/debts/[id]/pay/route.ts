@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic';
 // POST /api/debts/[id]/pay - Pay debt
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const authResult = await requireAuth();
   if (!authResult.ok) return authResult.response;
   const sessionUser = authResult.user;
@@ -27,7 +28,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       // Baca hutang DI DALAM transaction untuk cegah race (dua pembayaran bersamaan)
       const hutang = await tx.hutang.findUnique({
-        where: { id: params.id },
+        where: { id: id },
         include: { transaksi: { select: { cabangId: true } } },
       });
 
@@ -50,7 +51,7 @@ export async function POST(
       // Update ATOMIK: hanya kurangi sisa bila sisa >= jumlah.
       // Dua pembayaran bersamaan: yang kedua gagal di where-clause, bukan overpayment.
       const updated = await tx.hutang.updateMany({
-        where: { id: params.id, sisa: { gte: jumlah } },
+        where: { id: id, sisa: { gte: jumlah } },
         data: { sisa: { decrement: jumlah } },
       });
 
@@ -60,7 +61,7 @@ export async function POST(
 
       // Baca ulang sisa terbaru di dalam transaksi yang sama
       const current = await tx.hutang.findUnique({
-        where: { id: params.id },
+        where: { id: id },
         select: { sisa: true },
       });
       const sisaBaru = Number(current?.sisa ?? 0);
@@ -68,7 +69,7 @@ export async function POST(
       // Create payment record (userId dari session)
       const pembayaran = await tx.hutangPembayaran.create({
         data: {
-          hutangId: params.id,
+          hutangId: id,
           jumlah: Number(jumlah),
           metode: metode || 'TUNAI',
           catatan: catatan || null,
@@ -78,7 +79,7 @@ export async function POST(
 
       // Update status berdasarkan sisa terbaru
       const updatedHutang = await tx.hutang.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           status: sisaBaru === 0 ? 'LUNAS' : 'BELUM_LUNAS',
         },
@@ -129,8 +130,8 @@ export async function POST(
       userId: authResult.user.id,
       aksi: 'DEBT_PAY',
       tabel: 'hutang',
-      recordId: params.id,
-      dataBaru: { hutangId: params.id, jumlah, metode },
+      recordId: id,
+      dataBaru: { hutangId: id, jumlah, metode },
       request,
     });
 
